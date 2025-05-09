@@ -1,2 +1,0 @@
-Django>=4.2
-WeasyPrint      # for PDF generation
