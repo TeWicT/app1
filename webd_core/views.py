@@ -35,7 +35,7 @@ def page_identity(request):
         student = Student.objects.get(login=request.user.username)
     except Student.DoesNotExist:
         student = None
-    return render(request, 'webd_core/page_identity.html', {'user': request.user, 'student': student})
+    return render(request, 'webd_core/page_identity.html', {'user': request.user, 'student': student, 'is_editable':True,'have_prev_year':True})
 
 
 @login_required(login_url='page_webd')

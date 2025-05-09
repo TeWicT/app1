@@ -8,7 +8,7 @@
 <div id="webd_user">
     {% include "webd_core/user_header.html" %}
     <h2>Здравствуйте, {{student.full_name}}</h2>
-    <h2>Регистрационные данные за {{study_year}} уч. год</h2>
+    <h2>Регистрационные данные за {{student.study_year}} - {{student.study_year|add:1}} уч. год</h2>
 	<h3>Курс: {{student.courses}}, Группа: {{student.groups}}</h3>
 	{% if not is_editable %}
 	<h4>Внимание! Данные за этот год редактировать нельзя!</h4>
