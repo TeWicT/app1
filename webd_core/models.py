@@ -9,10 +9,12 @@ class Student(models.Model):
     courses = models.CharField("Курс", max_length=10)
     groups = models.CharField("Группа", max_length=50)
 
+    adviser_status = models.CharField("Ученая степень руководителя",blank=True, max_length=100)
+    adviser_position = models.CharField("Должность руководителя",blank=True, max_length=100)
     full_name = models.CharField("ФИО студента", max_length=200)
     title = models.CharField("Тема работы", max_length=255,blank=True)
     adviser_name = models.CharField("ФИО руководителя",blank=True, max_length=200)
-    adviser_status = models.CharField("Звание руководителя",blank=True, max_length=100)
+    adviser_rank = models.CharField("Ученое звание руководителя",blank=True, max_length=100)
     department = models.CharField("Кафедра",null=True, max_length=100)
     class Meta:
         db_table = 'student'

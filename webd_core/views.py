@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from .models import Student, Document
 from .parsing import query  # your import logic
 from .doc import generate_pdf  # your PDF logic
-from .forms import UploadForm  # create a form for uploads
+from .forms import UploadForm, StudentForm  # create a form for uploads
 
 
 def page_webd(request):
@@ -31,11 +31,34 @@ def page_login(request):
 
 @login_required(login_url='page_webd')
 def page_identity(request):
-    try:
-        student = Student.objects.get(login=request.user.username)
-    except Student.DoesNotExist:
-        student = None
-    return render(request, 'webd_core/page_identity.html', {'user': request.user, 'student': student, 'is_editable':True,'have_prev_year':True})
+    student = Student.objects.get(login=request.user.username)
+
+    # Подготовка справочников
+    all_positions = ['преподаватель','ст. преподаватель','доцент','профессор','зав. кафедрой','другая']
+    positions = [{'value': p, 'selected': p == student.adviser_position} for p in all_positions]
+    all_ranks = ['без звания','доцент','профессор']
+    ranks     = [{'value': r, 'selected': r == student.adviser_rank}     for r in all_ranks]
+    all_departments = ['ПМиК','ИМО','ГиТ','МА','ТВиАД','ТМОМИ']
+    departments     = [{'value': d, 'selected': d == student.department}  for d in all_departments]
+
+    if request.method == 'POST':
+        form = StudentForm(request.POST, instance=student)
+        if form.is_valid():
+            form.save()
+            # переход на GET, чтобы обновить student и убрать повторы POST
+            return redirect('page_identity')
+    else:
+        form = StudentForm(instance=student)
+
+    return render(request, 'webd_core/page_identity.html', {
+        'student': student,
+        'form': form,
+        'positions': positions,
+        'ranks': ranks,
+        'departments': departments,
+        'is_editable': True,
+        'have_prev_year': False,
+    })
 
 
 @login_required(login_url='page_webd')
