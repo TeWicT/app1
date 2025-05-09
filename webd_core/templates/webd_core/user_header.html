@@ -1,13 +1,13 @@
 <div class="webd_user_header">
     <a href="/#webd_form" id="search_link">К поиску и просмотру работ</a> |
-    <a href="/templates" id="templates_link" {% if page_templates %}class="user_no_file" {% endif %}>Шаблоны отчетов и
+    <a href="{% url "page_templates" %}" id="templates_link" {% if page_templates %}class="user_no_file" {% endif %}>Шаблоны отчетов и
         презентаций</a>
     {% if request.user.is_authenticated %}
     |
-    {% if request.user.is_authenticated == rstudent %}
-    <a href="/user/identity" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
+    {% if request.user.is_authenticated  %}
+    <a href="{% url 'page_identity' %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
         работы</a> |
-    <a href="/user/file" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
+    <a href="{% url "page_upload" %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
     {% else %}
     <a href="/query-adviser" {% if page_adviser %}class="user_no_file" {% endif %}>Руководство</a> |
     {% endif %}

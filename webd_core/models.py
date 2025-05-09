@@ -1,9 +1,11 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
 
 User = get_user_model()
 
 class Student(models.Model):
+    
     login = models.CharField("Логин студента", max_length=50, unique=True)
     study_year = models.CharField("Год", max_length=4)
     courses = models.CharField("Курс", max_length=10)
@@ -22,22 +24,25 @@ class Student(models.Model):
         return f"{self.login} – {self.full_name}"
 
 class Document(models.Model):
-    INDEX = 'index'
-    PREVIEW = 'preview'
-    FINAL = 'final'
+    INTERIM_REPORT      = 'interim_report'
+    INTERIM_PRESENTATION= 'interim_presentation'
+    FINAL_REPORT        = 'final_report'
+    FINAL_PRESENTATION  = 'final_presentation'
+
     DOC_TYPES = [
-        (INDEX, 'Индексный файл'),
-        (PREVIEW, 'Предварительный документ'),
-        (FINAL, 'Финальный документ'),
+        (INTERIM_REPORT,       'Промежуточный отчет'),
+        (INTERIM_PRESENTATION, 'Промежуточная презентация'),
+        (FINAL_REPORT,         'Окончательный отчет'),
+        (FINAL_PRESENTATION,   'Окончательная презентация'),
     ]
 
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='documents')
-    doc_type = models.CharField('Тип документа', max_length=20, choices=DOC_TYPES)
-    file = models.FileField('Файл', upload_to='students/%Y/%m/%d/')
-    uploaded_at = models.DateTimeField('Дата загрузки', auto_now_add=True)
+    student     = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='documents')
+    doc_type    = models.CharField("Тип документа", max_length=30, choices=DOC_TYPES)
+    file        = models.FileField("Файл", upload_to='students/%Y/%m/%d/')
+    uploaded_at = models.DateTimeField("Дата загрузки", auto_now_add=True)
 
     class Meta:
-        ordering = ['-uploaded_at']
+        ordering = ['doc_type']
 
     def __str__(self):
-        return f"{self.student.login} – {self.doc_type} @ {self.uploaded_at:%Y-%m-%d}"
+        return f"{self.student.login} – {self.get_doc_type_display()}"

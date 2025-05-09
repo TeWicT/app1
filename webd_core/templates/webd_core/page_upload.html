@@ -1,47 +1,82 @@
 {% extends "webd_core/layout.html" %}
-
+{% load custom_filters %}
 {% block title %}
 Курс: загрузка файлов
 {% endblock %}
 
 {% block content %}
 <div class="webd_user_file">
-    {% include "user_header.html" %}
-    <h2>Здравствуйте, {{student.full-name}}</h2>
-    <h2>Загрузка файлов за {{study-year}} уч. год</h2>
-	<h3>Курс: {{student.courses}}, Группа: {{student.groups}}</h3>
+    {% include "webd_core/user_header.html" %}
+    <h2>Здравствуйте, {{ student.full_name }}</h2>
+    <h2>Загрузка файлов за {{ student.study_year }} - {{ student.study_year|add:1 }} уч. год</h2>
+    <h3>Курс: {{ student.courses }}, Группа: {{ student.groups }}</h3>
     <hr/>
     <i>Ограничение на размер файла: 10Мб. Если требуется загрузить файл больше 10Мб, <br/>
        то следует обратиться к системному администратору.</i>
-    {% for f in files %}
-    <div>
-        <div class="user_file_label"><a target="_blank" {% if f.link %}href="{{f.link}}"{% endif %}>{{f.name}}</a></div>
-        <i class="webd_user_result_success" id="result_{{f.for}}_success">
-            {% if all f.result f.success? %}{{f.result}}{% endif %}
-        </i>
-        {% if f.link %}
-        <form class="delete-form" action="/user/file/{{student.years}}/delete" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="for-doc" class="user_for_doc" value="{{f.for}}"/>
-            
-            <input type="submit" name="delete-file" value="Удалить"/>
-        </form>
-        {% endif %}
+
+
+
+    {% for code, label in doc_types %}
+        {% with files|get_item:code as f %}
         <div>
-            <i class="webd_user_result_failure" id="result_{{f.for}}_failure">
-                {% if f.result %}{% if not f.success? %}{{f.result}}{% endif %}{% endif %}
+            <div class="user_file_label">
+                {% if f %}
+                    <a target="_blank" href="{{ f.file.url }}">{{ label }}</a>
+                {% else %}
+                    {{ label }}
+                {% endif %}
+            </div>
+
+            <i class="webd_user_result_success" id="result_{{ code }}_success">
+                {% if results|get_item:code and results|get_item:code.success %}
+                    {{ results|get_item:code.result }}
+                {% endif %}
             </i>
+
+            {% if f %}
+            <form class="delete-form"
+                  action="{% url 'page_upload' %}"
+                  method="POST"
+                  enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="for-doc" value="{{ code }}"/>
+                <input type="submit" name="delete-file" value="Удалить"/>
+            </form>
+            {% endif %}
+
+            <div>
+                <i class="webd_user_result_failure" id="result_{{ code }}_failure">
+                    {% if results|get_item:code and not results|get_item:code.success %}
+                        {{ results|get_item:code.result }}
+                    {% endif %}
+                </i>
+            </div>
+
+            <span style="text-align:right; vertical-align:top;">Загрузка нового файла: </span>
+            <form class="save-form"
+                  action="{% url 'page_upload' %}"
+                  method="POST"
+                  enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="for-doc" value="{{ code }}"/>
+
+                <input type="file"
+                       required
+                       name="doc-file"
+                       id="{{ code }}"
+                       class="user_file"
+                       accept="application/pdf"
+                       onchange="validate_file(this)"
+                       style="width:70px; margin-bottom:5px;"/><br/>
+                <input type="submit"
+                       name="send-file"
+                       id="submit_{{ code }}"
+                       value="Отправить в систему Курс"/>
+            </form>
         </div>
-        <span style="text-align:right; vertical-align:top;">Загрузка нового файла: </span>
-        <form class="save-form" action="/user/file/{{student.years}}/upload" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="for-doc" class="user_for_doc" value="{{f.for}}"/>
-            
-            <input type="file" required="required" name="doc-file" id="{{f.for}}" 
-                   style="width:70px; margin-bottom:5px;"
-                   class="user_file" accept="application/pdf" onchange="validate_file(this)"/><br/>
-            <input type="submit" name="send-file" id="submit_{{f.for}}" value="Отправить в систему Курс"/>
-        </form>
-    </div>
-    <br/>
+        <br/>
+        {% endwith %}
     {% endfor %}
+
 </div>
 {% endblock %}
