@@ -70,7 +70,8 @@
             Ссылка для загрузки файлов за 2019-2020 учебный год:<br/>
             https://kurs.cs.petrsu.ru/user/file/2019</p>
     </div>
-    <form id="webd_form" method="POST" action="/query">
+    <form id="webd_form" method="POST" action="{% url 'query' %}">
+        {% csrf_token %}
         <h2>Поиск и просмотр работ</h2>
         <div class="labeled_select"
              title="Для списка доступен множественный выбор. Для этого нужно либо провести указателем с зажатой левой кнопкой мыши по смежным группам, либо выбрать отдельностоящие группы одиночным нажатием на левую кнопку мыши с зажатой клавишей Ctrl.">
@@ -88,7 +89,7 @@
             <select name="groups" id="inp_group" class="inp txt_inp" size="7" multiple="multiple">
                 <option value="" selected="selected">Все</option>
                 {% for g in groups %}
-                <option value="{{g}}">{{g}}</option>
+                <option value="{{g.name}}">{{g.name}}</option>
                 {% endfor %}
             </select>
         </div>
@@ -98,7 +99,7 @@
         <select name="department" id="inp_department" class="inp txt_inp">
             <option value="" selected="selected">Все</option>
             {% for d in departments %}
-            <option value="{{d}}">{{d}}</option>
+            <option value="{{d.value}}">{{d.value}}</option>
             {% endfor %}
         </select>
 

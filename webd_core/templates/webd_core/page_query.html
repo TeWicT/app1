@@ -1,13 +1,41 @@
-{% extends "webd_core/layout.html" %}
 
-{% block title %}
-Курс: поиск{% if subtitle %} &mdash; {{subtitle}}{% endif %}
-{% endblock %}
+{% load static %}
+
+
 
 {% block content %}
-{% include "user_header.html" %}
-{% if subtitle %}
-<h1>{{subtitle}}</h1>
-{% endif %}
-<div id="webd_result">{{query-result|safe}}</div>
+  
+
+  {# Сгруппируем панели по году #}
+  {% regroup panels by year as years_list %}
+
+  {% for year_panel in years_list %}
+    {# Заголовок года один раз #}
+    <h2>
+      {{ year_panel.grouper }}–{{ year_panel.grouper|add:1 }} уч. год
+      ({{ year_panel.list|length }} раб.)
+    </h2>
+
+    {# Далее сгруппируем по кафедре внутри этого года #}
+    {% regroup year_panel.list by dept as depts_list %}
+
+    {% for dept_panel in depts_list %}
+      <h3>
+        Кафедра: {{ dept_panel.grouper }}
+        ({% with dept_panel.list|length as dept_rows_count %}{{ dept_rows_count }}{% endwith %} раб.)
+      </h3>
+
+      {# Итерируемся по каждой группе в этой кафедре #}
+      {% for panel in dept_panel.list %}
+        <h4>
+          Группа: {{ panel.group }}
+          ({{ panel.group_total }} раб.)
+        </h4>
+
+        {% include "webd_core/result-table.html" with caption=panel.group files=files students=panel.rows admin=admin %}
+      {% endfor %}
+    {% endfor %}
+  {% empty %}
+    <p>Ничего не найдено.</p>
+  {% endfor %}
 {% endblock %}

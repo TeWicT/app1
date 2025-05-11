@@ -1,3 +1,4 @@
+{% load static %}
 <table class="webd_result_table">
 	<caption class="webd_rt_caption">{{caption|safe}}</caption>
 	<tr class="webd_rt_head">
@@ -10,7 +11,7 @@
 		<th class="webd_rt_head_cell webd_rt_name_cell">
 			Ф.И.О. студента
 		</th>
-        {% if admin? %}
+        {% if admin %}
         <th class="webd_rt_head_cell webd_rt_name_cell">
             Логин
         </th>
@@ -41,20 +42,20 @@
         <td class="webd_rt_cell webd_rt_num_cell">{{s.index}}</td>
         <td class="webd_rt_cell webd_rt_title_cell">{{s.title}}</td>
         <td class="webd_rt_cell webd_rt_name_cell" title="{{s.logins}}">{{s.name}}</td>
-        {% if admin? %}
+        {% if admin %}
         <td class="webd_rt_cell webd_rt_name_cell" title="{{s.logins}}">{{s.logins}}</td>
         {% endif %}
-        <td class="webd_rt_cell webd_rt_adviser_cell">{{s.adviser-name-formatted}}</td>
+        <td class="webd_rt_cell webd_rt_adviser_cell">{{s.adviser_name_formatted}}</td>
         {% for f in s.sfiles %}
         <td class="webd_rt_cell webd_rt_intsl_cell {% if f.file %}
-                                                        {%if f.file.in-time%}webd_rt_has_file_in_time{%else%}webd_rt_has_file{%endif%}
+                                                        {%if f.file.in_time%}webd_rt_has_file_in_time{%else%}webd_rt_has_file{%endif%}
                                                     {%else%}webd_rt_no_file{%endif%}">
             {% if f.file %}
-            <a target="_blank" href="{{f.file.link}}"><img alt="PDF" src="pdf_icon.png"/></a>
+            <a target="_blank" href="{{f.link}}"><img alt="PDF" src="{% static "images/pdf_icon.png" %}"/></a>
             {%endif%}
         </td>
         {% endfor %}
-        <!--td class="webd_rt_cell webd_rt_intrep_cell {% if s.int-report %}
+        {% comment "" %}<!--td class="webd_rt_cell webd_rt_intrep_cell {% if s.int-report %}
                                                         {%if s.int-report.in-time%}webd_rt_has_file_in_time{%else%}webd_rt_has_file{%endif%}
                                                     {%else%}webd_rt_no_file{%endif%}">
             {% if s.int-report %}
@@ -81,7 +82,7 @@
             {% if s.fin-slides %}
             <a target="_blank" href="{{s.fin-slides.link}}"><img alt="PDF" src="pdf_icon.png"/></a>
             {%endif%}
-        </td-->
+        </td-->{% endcomment %}
     </tr>
     {% endfor %}
 </table>
