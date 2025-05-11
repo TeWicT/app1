@@ -8,8 +8,8 @@
 <div class="webd_user_file">
     {% include "webd_core/user_header.html" %}
     <h2>Здравствуйте, {{ student.full_name }}</h2>
-    <h2>Загрузка файлов за {{ student.study_year }} - {{ student.study_year|add:1 }} уч. год</h2>
-    <h3>Курс: {{ student.courses }}, Группа: {{ student.groups }}</h3>
+    <h2>Загрузка файлов за {{enroll.year.year}} - {{enroll.year.year|add:1}} уч. год</h2>
+    <h3>Курс: {{ enroll.courses }}, Группа: {{ enroll.group.name }}</h3>
     <hr/>
     <i>Ограничение на размер файла: 10Мб. Если требуется загрузить файл больше 10Мб, <br/>
        то следует обратиться к системному администратору.</i>
@@ -35,7 +35,7 @@
 
             {% if f %}
             <form class="delete-form"
-                  action="{% url 'page_upload' %}"
+                  action="{% url 'page_upload' foundyear %}"
                   method="POST"
                   enctype="multipart/form-data">
                 {% csrf_token %}
@@ -54,7 +54,7 @@
 
             <span style="text-align:right; vertical-align:top;">Загрузка нового файла: </span>
             <form class="save-form"
-                  action="{% url 'page_upload' %}"
+                  action="{% url 'page_upload' foundyear=foundyear %}"
                   method="POST"
                   enctype="multipart/form-data">
                 {% csrf_token %}

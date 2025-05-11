@@ -2,16 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from .models import Student, Document
+from .models import Student, Document,Enrollment, Year
 from .parsing import query  # your import logic
 from .doc import generate_pdf  # your PDF logic
-from .forms import UploadForm, StudentForm  # create a form for uploads
+from .forms import  StudentForm  # create a form for uploads
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 
 def page_webd(request):
+    foundyear = request.foundyear
     if request.user.is_authenticated:
-        return redirect('page_identity')
+        return redirect('page_identity',foundyear=foundyear)
     error = None
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -19,46 +20,50 @@ def page_webd(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect('page_identity')
+            return redirect('page_identity',foundyear=foundyear)
         else:
             error = 'Неверный логин или пароль'
     return render(request, 'webd_core/page_webd.html', {'error': error})
 
 
 def page_login(request):
-    # optional separate login page
+    
     return page_webd(request)
 
 
 @login_required(login_url='page_webd')
-def page_identity(request):
+def page_identity(request,foundyear):
     student = Student.objects.get(login=request.user.username)
-
+    year = Year.objects.get(year=foundyear)
+    enrollment = Enrollment.objects.get(student=student,year=year)
+    print(student,enrollment)
     # Подготовка справочников
     all_positions = ['преподаватель','ст. преподаватель','доцент','профессор','зав. кафедрой','другая']
-    positions = [{'value': p, 'selected': p == student.adviser_position} for p in all_positions]
+    positions = [{'value': p, 'selected': p == enrollment.adviser_position} for p in all_positions]
     all_ranks = ['без звания','доцент','профессор']
-    ranks     = [{'value': r, 'selected': r == student.adviser_rank}     for r in all_ranks]
+    ranks     = [{'value': r, 'selected': r == enrollment.adviser_rank}     for r in all_ranks]
     all_departments = ['ПМиК','ИМО','ГиТ','МА','ТВиАД','ТМОМИ']
-    departments     = [{'value': d, 'selected': d == student.department}  for d in all_departments]
+    departments     = [{'value': d, 'selected': d == enrollment.department}  for d in all_departments]
 
     if request.method == 'POST':
-        form = StudentForm(request.POST, instance=student)
+        form = StudentForm(request.POST, instance=enrollment)
         if form.is_valid():
             form.save()
             # переход на GET, чтобы обновить student и убрать повторы POST
-            return redirect('page_identity')
+            return redirect('page_identity',foundyear=year)
     else:
-        form = StudentForm(instance=student)
+        form = StudentForm(instance=enrollment)
 
     return render(request, 'webd_core/page_identity.html', {
         'student': student,
+        'enroll':enrollment,
         'form': form,
         'positions': positions,
         'ranks': ranks,
         'departments': departments,
         'is_editable': True,
         'have_prev_year': False,
+        'foundyear': foundyear,
     })
 
 
@@ -70,16 +75,17 @@ def query_view(request):
 
 
 def templates_view(request):
-    cfg = None  # load config if needed
-    # your logic to list or edit templates
-    return render(request, 'webd_core/page_templates.html')
+    foundyear = request.foundyear
+    return render(request, 'webd_core/page_templates.html',{'foundyear':foundyear})
 
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def upload_view(request):
+def upload_view(request,foundyear):
     student = Student.objects.get(login=request.user.username)
+    year = Year.objects.get(year=foundyear)
+    enrollment = Enrollment.objects.get(student=student,year=year)
     results = {}
     
     if request.method == "POST":
@@ -98,14 +104,14 @@ def upload_view(request):
             elif uploaded_file.size > 10 * 1024 * 1024:
                 results[doc_type] = {"success": False, "result": "Размер файла превышает 10 Мб"}
             else:
-                document, _ = Document.objects.get_or_create(student=student, doc_type=doc_type)
+                document, _ = Document.objects.get_or_create(enrollment=enrollment, doc_type=doc_type)
                 document.file = uploaded_file
                 document.save()
                 results[doc_type] = {"success": True, "result": "Файл успешно загружен"}
 
         elif "delete-file" in request.POST:
             try:
-                document = Document.objects.get(student=student, doc_type=doc_type)
+                document = Document.objects.get(enrollment=enrollment, doc_type=doc_type)
                 document.file.delete(save=False)
                 document.delete()
                 results[doc_type] = {"success": True, "result": "Файл удалён"}
@@ -113,14 +119,16 @@ def upload_view(request):
                 results[doc_type] = {"success": False, "result": "Файл не найден"}
 
     # Словарь файлов, ключ — тип, значение — объект Document или None
-    documents = {doc.doc_type: doc for doc in student.documents.all()}
+    documents = {doc.doc_type: doc for doc in enrollment.documents.all()}
     files = documents
 
     context = {
         "student": student,
+        "enroll":enrollment,
         "doc_types": Document.DOC_TYPES,
         "files": files,
         "results": results,
+        "foundyear": foundyear,
     }
 
     return render(request, "webd_core/page_upload.html", context)

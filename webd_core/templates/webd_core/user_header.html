@@ -5,9 +5,9 @@
     {% if request.user.is_authenticated %}
     |
     {% if request.user.is_authenticated  %}
-    <a href="{% url 'page_identity' %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
+    <a href="{% url 'page_identity' foundyear=foundyear %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
         работы</a> |
-    <a href="{% url "page_upload" %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
+    <a href="{% url "page_upload" foundyear=foundyear %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
     {% else %}
     <a href="/query-adviser" {% if page_adviser %}class="user_no_file" {% endif %}>Руководство</a> |
     {% endif %}

@@ -1,21 +1,19 @@
 from django import forms
-from .models import Document,Student
+from .models import Enrollment, Document,Student
 
-class UploadForm(forms.ModelForm):
+
+
+class DocumentForm(forms.ModelForm):
     class Meta:
         model = Document
         fields = ['doc_type', 'file']
-        labels = {
-            'doc_type': 'Тип документа',
-            'file': 'Файл',
-        }
         widgets = {
             'doc_type': forms.Select(attrs={'class': 'form-control'}),
-            'file': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+            'file':     forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
         }
 class StudentForm(forms.ModelForm):
     class Meta:
-        model = Student
+        model = Enrollment
         fields = ['adviser_name', 'adviser_position', 'adviser_status', 'adviser_rank', 'department','title']
         labels = {
             'adviser_name': 'ФИО руководителя',

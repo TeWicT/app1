@@ -8,8 +8,8 @@
 <div id="webd_user">
     {% include "webd_core/user_header.html" %}
     <h2>Здравствуйте, {{student.full_name}}</h2>
-    <h2>Регистрационные данные за {{student.study_year}} - {{student.study_year|add:1}} уч. год</h2>
-	<h3>Курс: {{student.courses}}, Группа: {{student.groups}}</h3>
+    <h2>Регистрационные данные за {{enroll.year.year}} - {{enroll.year.year|add:1}} уч. год</h2>
+	<h3>Курс: {{enroll.courses}}, Группа: {{enroll.group.name}}</h3>
 	{% if not is_editable %}
 	<h4>Внимание! Данные за этот год редактировать нельзя!</h4>
 	{% endif %}
@@ -31,7 +31,7 @@
             </b>
         </p>
     {% endif%}
-	<form class="webd_user_form" method="POST" action="{% url 'page_identity' %}">
+	<form class="webd_user_form" method="POST" action="{% url 'page_identity' foundyear=foundyear %}">
 		{% csrf_token %}
 		<em>Для регистрации полностью новой работы необходимо заполнить все поля ввода, отмеченные символом <span class="star">*</span>!</em>
 		<div title="Имя и отчество руководителя работы в формате 'И.О. Фамилия'. Если руководителей несколько, то перечислить через запятую.">
@@ -41,7 +41,7 @@
             </label>
 			<input type="text" id="adviser_name" name="adviser_name" class="user_adviser_name inp txt_inp"
 				placeholder="И. О. Фамилия" style="width:400px" pattern="([А-Я|A-Z]\.\s?){1,2}[А-Я|A-Z][А-Я|A-Z|а-я|a-z]{0,20}(,\s?([А-Я|A-Z]\.\s?){1,2}[А-Я|A-Z][А-Я|A-Z|а-я|a-z]{0,20})*"
-                required="required" value="{{student.adviser_name}}"/>
+                required="required" value="{{enroll.adviser_name}}"/>
 		</div>
 		<div title="Должность, занимаемая руководителем работы. Например, 'преподаватель'.">
 			<label for="adviser_position" class="user_form_label"><span class="star">*</span>Должность руководителя:</label>
@@ -58,7 +58,7 @@
 			<label for="adviser_status" class="user_form_label">Ученая степень руководителя:</label>
 			<input id="adviser_status" placeholder="к. т. н." type="text"
                    name="adviser_status" class="user_adviser_status inp txt_inp"
-				   list="status-list" autocomplete="off" value="{{student.adviser_status}}"
+				   list="status-list" autocomplete="off" value="{{enroll.adviser_status}}"
                    pattern="[А-Яа-яA-Za-z\.\-\s]*"/>
 			<datalist id="status-list">
 				<option value="без степени"></option>
@@ -94,7 +94,7 @@
 		<div>
 			<label for="user_title" class="user_form_label" style="vertical-align:top"><span class="star">*</span>Тема работы:</label>
 			<textarea id="user_title" name="title" class="user_title inp"
-                      rows="3" style="width:400px" maxlength="250" required="required">{{student.title}}</textarea>
+                      rows="3" style="width:400px" maxlength="250" required="required">{{enroll.title}}</textarea>
 		</div>
 		<div><input type="submit" value="Отправить" class="inp btn_save"/></div>
 	</form>
