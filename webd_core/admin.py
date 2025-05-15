@@ -7,7 +7,7 @@ class EnrollmentInline(admin.TabularInline):
     verbose_name = "Текущий год обучения / группа"
     verbose_name_plural = "Годы обучения и группы студента"
     # Покажем только поля year и group
-    fields = ('year', 'group','adviser_status','adviser_position','title','adviser_name','adviser_rank','department')
+    fields = ('year', 'group','courses','adviser_status','adviser_position','title','adviser_name','adviser_rank','department')
     # Сделаем именно селект (для год–группа используем всплывающее окно для создания новой группы)
     raw_id_fields = ('group',)
     # +иконка для «добавить новую группу» откроет попап, где можно её создать

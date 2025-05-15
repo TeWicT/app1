@@ -50,7 +50,7 @@ class Enrollment(models.Model):
                               related_name='enrollments', verbose_name="Группа")
 
 
-    courses = models.CharField("Курс", max_length=10)
+    courses = models.CharField("Курс",blank=True, max_length=10)
 
     adviser_status = models.CharField("Ученая степень руководителя",blank=True, max_length=100)
     adviser_position = models.CharField("Должность руководителя",blank=True, max_length=100)

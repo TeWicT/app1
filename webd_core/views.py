@@ -3,7 +3,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from .models import Student, Document,Enrollment, Year,Group
-from .parsing import query  # your import logic
 from .doc import generate_pdf  # your PDF logic
 from .forms import  StudentForm  # create a form for uploads
 from django.views.decorators.http import require_http_methods
@@ -22,7 +21,7 @@ def page_webd(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            # После логина, продолжаем оставаться на этой же странице
+            return redirect('page_identity',foundyear=foundyear)
         else:
             error = 'Неверный логин или пароль'
     
