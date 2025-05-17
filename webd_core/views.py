@@ -1,13 +1,15 @@
-from django.shortcuts import render, redirect, get_object_or_404    
+from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from .models import Student, Document,Enrollment, Year,Group
-from .doc import generate_pdf  # your PDF logic
-from .forms import  StudentForm  # create a form for uploads
+from .forms import  StudentForm  
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from collections import defaultdict
+from django.template.loader import render_to_string
+from .utils.pdf import html_to_pdf
+import itertools
 def page_webd(request):
     foundyear = request.foundyear
     year = Year.objects.all()
@@ -170,6 +172,84 @@ def templates_view(request):
 
     return render(request, 'webd_core/page_templates.html',{'foundyear':foundyear})
 
+
+@login_required(login_url='page_webd')
+def query_report(request):
+    # 1) Фильтры точно как в query_view
+    years      = request.POST.getlist('years')
+    groups     = request.POST.getlist('groups')
+    department = request.POST.get('department', '').strip()
+    name       = request.POST.get('name', '').strip()
+    adviser    = request.POST.get('adviser-name', '').strip()
+
+    qs = Enrollment.objects.select_related('student','group','year').all()
+    if years and any(years):
+        qs = qs.filter(year__year__in=[int(y) for y in years if y.isdigit()])
+    if groups and any(groups):
+        qs = qs.filter(group__name__in=groups)
+    if department:
+        qs = qs.filter(department__iexact=department)
+    if name:
+        qs = qs.filter(student__full_name__icontains=name)
+    if adviser:
+        qs = qs.filter(adviser_name__icontains=adviser)
+
+    # 2) Группировка по годам → кафедрам → группам
+    panels = []
+    sorted_qs = qs.order_by('year__year','department','group__name')
+    for year_value, year_qs in itertools.groupby(sorted_qs, key=lambda e: e.year.year):
+        year_list  = list(year_qs)
+        year_total = len(year_list)
+        for dept_value, dept_qs in itertools.groupby(year_list, key=lambda e: e.department):
+            dept_list  = list(dept_qs)
+            dept_total = len(dept_list)
+            for group_value, group_qs in itertools.groupby(dept_list, key=lambda e: e.group.name):
+                group_list  = list(group_qs)
+                group_total = len(group_list)
+
+                # 3) Собираем строки для этой панели
+                rows = []
+                doc_types = Document.DOC_TYPES
+                for idx, enroll in enumerate(group_list, start=1):
+                    docs_by_type = {d.doc_type: d for d in enroll.documents.all()}
+                    sfiles = []
+                    for code, _ in doc_types:
+                        doc = docs_by_type.get(code)
+                        sfiles.append({
+                            'file':    bool(doc),
+                            'in_time': True,
+                            'link':    doc.file.url if doc else '',
+                        })
+                    rows.append({
+                        'index':                  idx,
+                        'title':                  enroll.title,
+                        'name':                   enroll.student.full_name,
+                        'logins':                 enroll.student.login,
+                        'adviser_name_formatted': enroll.adviser_name,
+                        'sfiles':                 sfiles,
+                    })
+
+                panels.append({
+                    'year':        year_value,
+                    'year_total':  year_total,
+                    'dept':        dept_value,
+                    'dept_total':  dept_total,
+                    'group':       group_value,
+                    'group_total': group_total,
+                    'rows':        rows,
+                })
+
+    context = {
+        'panels': panels,
+        'files':  [{'code': c, 'name': l} for c, l in Document.DOC_TYPES],
+        'admin':  request.user.is_staff,
+    }
+    html = render_to_string('webd_core/report_template.html', context)
+
+    pdf_bytes = html_to_pdf(html)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="report.pdf"'
+    return response
 
 
 @login_required

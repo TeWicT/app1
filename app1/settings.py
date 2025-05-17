@@ -129,4 +129,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
+WKHTMLTOPDF_CMD = os.getenv(
+    'WKHTMLTOPDF_CMD',
+    r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'  # или '/usr/local/bin/wkhtmltopdf'
+)
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

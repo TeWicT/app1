@@ -165,7 +165,7 @@
         <input type="submit" id="btn_search" value="Найти" class="inp"
                title="Выводит таблицу с информацией о студентах, удовлетворяющих введенным в форму 'Поиск работ' параметрам."/>
         <input type="submit" id="btn_report" value="Отчет" class="inp"
-               formaction="/query/report" formtarget="_blank"
+               formaction="{% url 'query_report' %}" formtarget="_blank"
                title="Генерирует PDF-файл с информацией о студентах, удовлетворяющих введенным в форму 'Поиск работ' параметрам."/>
         <input type="submit" id="btn_missing_report" value="Список не зарегистрированных" class="inp hidden"
                formaction="/query/missing" formtarget="_blank"

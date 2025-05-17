@@ -9,4 +9,7 @@ urlpatterns = [
     path('templates/', views.templates_view, name='page_templates'),
     path('file/<int:foundyear>/', views.upload_view, name='page_upload'),
     path('login/exit/', views.logout_view, name='logout'),
+    path('query/report/', views.query_report, name='query_report'),
+
+
 ]
