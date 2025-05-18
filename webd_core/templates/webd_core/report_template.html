@@ -1,12 +1,39 @@
-{% load static %}
+
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-    <style>
-
-    
-    </style>
+  <style>
+    .page-break { page-break-after: always; }
+    body {
+      font-family: "DejaVuSans", sans-serif;
+      font-size: 12px;
+      margin: 20px;
+    }
+    h2, h3, h4 {
+      margin: 10px 0 4px;
+      padding: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 4px 6px;
+      vertical-align: middle;
+    }
+    th {
+      background: #eee;
+      font-weight: bold;
+    }
+    .section-caption {
+      margin-top: 24px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
   <h1>Отчет «Курсовые работы»</h1>
@@ -14,7 +41,7 @@
   {# 1) Сгруппируем все панели по году #}
   {% regroup panels by year as panels_by_year %}
 
-  {% for year_group in panels_by_year %}
+  {% for year_group in panels_by_year reversed  %}
     {# Выводим заголовок года один раз #}
     <h2>{{ year_group.grouper }}–{{ year_group.grouper|add:1 }} уч. год</h2>
 
@@ -50,15 +77,21 @@
               {% if file.file %}Да{% else %}Нет{% endif %}
             </td>
           {% endfor %}
+          <td></td>
         </tr>
       {% endfor %}
     </table>
+    <div class="page-break"></div>
   {% empty %}
     <p>Ничего не найдено.</p>
-  
+
+      
       {% endfor %}
+     
     {% endfor %}
+    <div class="page-break"></div>
   {% endfor %}
+
 
 </body>
 </html>
