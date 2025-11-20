@@ -38,59 +38,95 @@
 <body>
   <h1>Отчет «Курсовые работы»</h1>
 
-  {# 1) Сгруппируем все панели по году #}
-  {% regroup panels by year as panels_by_year %}
-
-  {% for year_group in panels_by_year reversed  %}
-    {# Выводим заголовок года один раз #}
-    <h2>{{ year_group.grouper }}–{{ year_group.grouper|add:1 }} уч. год</h2>
-
-    {# 2) Внутри этого года сгруппируем по кафедре #}
-    {% regroup year_group.list by dept as depts %}
-
-    {% for dept_group in depts %}
-      {# Заголовок кафедры один раз на всю кафедру в этом году #}
-      <h3>Кафедра: {{ dept_group.grouper }}</h3>
-
-      {# 3) Для каждой группы в этой кафедре выводим её блок #}
-      {% for panel in dept_group.list %}
-        <h4>Группа: {{ panel.group }}</h4>
+  {% if group_method == 'flatten' %}
+    {% if flat_sections %}
+      {% for section in flat_sections %}
+        <h2>{{ section.caption }}</h2>
         <table>
-      <tr>
-        <th>№</th>
-        <th>Название работы</th>
-        <th>Ф.И.О. студента</th>
-        <th>Ф.И.О. руководителя</th>
-        {% for f in files %}
-          <th>{{ f.name }}</th>
-        {% endfor %}
-        <th>Подпись руководителя</th>
-      </tr>
-      {% for s in panel.rows %}
-        <tr>
-          <td align="center">{{ s.index }}</td>
-          <td>{{ s.title }}</td>
-          <td>{{ s.name }}</td>
-          <td>{{ s.adviser_name_formatted }}</td>
-          {% for file in s.sfiles %}
-            <td align="center">
-              {% if file.file %}Да{% else %}Нет{% endif %}
-            </td>
+          <tr>
+            <th>№</th>
+            <th>Название работы</th>
+            <th>Ф.И.О. студента</th>
+            <th>Ф.И.О. руководителя</th>
+            {% for f in section.files %}
+              <th>{{ f.name }}</th>
+            {% endfor %}
+            <th>Подпись руководителя</th>
+          </tr>
+          {% for s in section.students %}
+            <tr>
+              <td align="center">{{ s.index }}</td>
+              <td>{{ s.title }}</td>
+              <td>{{ s.name }}</td>
+              <td>{{ s.adviser_name_formatted }}</td>
+              {% for file in s.sfiles %}
+                <td align="center">
+                  {% if file.file %}Да{% else %}Нет{% endif %}
+                </td>
+              {% endfor %}
+              <td></td>
+            </tr>
           {% endfor %}
-          <td></td>
-        </tr>
+        </table>
+        <div class="page-break"></div>
       {% endfor %}
-    </table>
-    <div class="page-break"></div>
-  {% empty %}
-    <p>Ничего не найдено.</p>
+    {% else %}
+      <p>Ничего не найдено.</p>
+    {% endif %}
+  {% else %}
+    {# 1) Сгруппируем все панели по году #}
+    {% regroup panels by year as panels_by_year %}
 
-      
+    {% for year_group in panels_by_year reversed  %}
+      {# Выводим заголовок года один раз #}
+      <h2>{{ year_group.grouper }}–{{ year_group.grouper|add:1 }} уч. год</h2>
+
+      {# 2) Внутри этого года сгруппируем по кафедре #}
+      {% regroup year_group.list by dept as depts %}
+
+      {% for dept_group in depts %}
+        {# Заголовок кафедры один раз на всю кафедру в этом году #}
+        <h3>Кафедра: {{ dept_group.grouper }}</h3>
+
+        {# 3) Для каждой группы в этой кафедре выводим её блок #}
+        {% for panel in dept_group.list %}
+          <h4>Группа: {{ panel.group }}</h4>
+          <table>
+            <tr>
+              <th>№</th>
+              <th>Название работы</th>
+              <th>Ф.И.О. студента</th>
+              <th>Ф.И.О. руководителя</th>
+              {% for f in panel.files %}
+                <th>{{ f.name }}</th>
+              {% endfor %}
+              <th>Подпись руководителя</th>
+            </tr>
+            {% for s in panel.rows %}
+              <tr>
+                <td align="center">{{ s.index }}</td>
+                <td>{{ s.title }}</td>
+                <td>{{ s.name }}</td>
+                <td>{{ s.adviser_name_formatted }}</td>
+                {% for file in s.sfiles %}
+                  <td align="center">
+                    {% if file.file %}Да{% else %}Нет{% endif %}
+                  </td>
+                {% endfor %}
+                <td></td>
+              </tr>
+            {% endfor %}
+          </table>
+          <div class="page-break"></div>
+        {% empty %}
+          <p>Ничего не найдено.</p>
+        {% endfor %}
       {% endfor %}
-     
+      <div class="page-break"></div>
+    {% empty %}
+      <p>Ничего не найдено.</p>
     {% endfor %}
-    <div class="page-break"></div>
-  {% endfor %}
+  {% endif %}
 
 
 </body>

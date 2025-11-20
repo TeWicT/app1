@@ -2,20 +2,197 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from .models import Student, Document,Enrollment, Year,Group
-from .forms import  StudentForm  
+from django.db import transaction
+from django.db.models import Q, Prefetch, Count
+from django.utils import timezone
+from django.urls import reverse
+from .models import (
+    Student,
+    Document,
+    Enrollment,
+    Year,
+    Group,
+    Topic,
+    TopicRequest,
+    DEPARTMENTS,
+    ADVISER_POSITION_CHOICES,
+    COURSE_CHOICES,
+)
+from .forms import StudentForm
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from collections import defaultdict
 from django.template.loader import render_to_string
 from .utils.pdf import html_to_pdf
-import itertools
+
+GROUP_METHOD_DEFAULT = 'default'
+SORT_METHOD_DEFAULT = 'by-student-name'
+SORT_ORDER_DEFAULT = 'ascending'
+HAVE_INDEX_DEFAULT = 'registered'
+def _parse_course(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+SORT_FIELDS = {
+    'by-student-name': ['student__full_name', 'adviser_name', 'id'],
+    'by-adviser-name': ['adviser_name', 'student__full_name', 'id'],
+    'by-identity-date': ['id'],
+}
+
+
+def _get_ordering(sort_method: str, sort_order: str):
+    fields = SORT_FIELDS.get(sort_method, SORT_FIELDS[SORT_METHOD_DEFAULT])
+    if sort_order == 'descending':
+        return [f"-{field}" for field in fields]
+    return fields
+
+
+def _apply_common_filters(post_data):
+    years = post_data.getlist('years')
+    groups = post_data.getlist('groups')
+    department = post_data.get('department', '').strip()
+    name = post_data.get('name', '').strip()
+    adviser = post_data.get('adviser-name', '').strip()
+    have_index = post_data.get('have-index', HAVE_INDEX_DEFAULT)
+    group_method = post_data.get('group-method', GROUP_METHOD_DEFAULT)
+    sort_method = post_data.get('sort-method', SORT_METHOD_DEFAULT)
+    sort_order = post_data.get('sort-order', SORT_ORDER_DEFAULT)
+
+    qs = Enrollment.objects.select_related('student', 'group', 'year').all()
+
+    if years and any(years):
+        year_values = [int(y) for y in years if y and y.isdigit()]
+        if year_values:
+            qs = qs.filter(year__year__in=year_values)
+    if groups and any(groups):
+        group_values = [g for g in groups if g]
+        if group_values:
+            qs = qs.filter(group__name__in=group_values)
+    if department:
+        qs = qs.filter(department__iexact=department)
+    if name:
+        qs = qs.filter(student__full_name__icontains=name)
+    if adviser:
+        qs = qs.filter(adviser_name__icontains=adviser)
+
+    if have_index == 'registered':
+        qs = qs.exclude(Q(title__isnull=True) | Q(title=''))
+    elif have_index == 'unregistered':
+        qs = qs.filter(Q(title__isnull=True) | Q(title=''))
+
+    qs = qs.order_by(*_get_ordering(sort_method, sort_order))
+
+    filters = {
+        'group_method': group_method if group_method in {'default', 'flatten'} else GROUP_METHOD_DEFAULT,
+        'sort_method': sort_method,
+        'sort_order': sort_order if sort_order in {'ascending', 'descending'} else SORT_ORDER_DEFAULT,
+        'have_index': have_index if have_index in {'registered', 'unregistered', 'all'} else HAVE_INDEX_DEFAULT,
+    }
+    return qs, filters
+
+
+def _build_row(enroll, doc_types):
+    docs = {d.doc_type: d for d in enroll.documents.all()}
+    sfiles = []
+    for code, _ in doc_types:
+        doc = docs.get(code)
+        sfiles.append({
+            'file': bool(doc),
+            'in_time': True,
+            'link': doc.file.url if doc else '',
+        })
+    return {
+        'year': enroll.year.year,
+        'department': enroll.department,
+        'group': enroll.group.name,
+        'title': enroll.title,
+        'name': enroll.student.full_name,
+        'logins': enroll.student.login,
+        'adviser_name_formatted': enroll.adviser_name,
+        'sfiles': sfiles,
+    }
+
+
+def _attach_indexes(rows):
+    return [dict(row, index=idx) for idx, row in enumerate(rows, start=1)]
+
+
+def _collect_grouped_rows(qs):
+    grouped = defaultdict(lambda: defaultdict(dict))
+    flat_rows = {False: [], True: []}
+
+    for enroll in qs:
+        is_latest = enroll.group.is_latest
+        doc_types = Document.get_doc_types_for_group(is_latest)
+        row = _build_row(enroll, doc_types)
+
+        year_entry = grouped[enroll.year.year]
+        dept_entry = year_entry.setdefault(enroll.department, {})
+        group_entry = dept_entry.setdefault(enroll.group.name, {
+            'rows': [],
+            'doc_types': doc_types,
+            'is_latest': is_latest,
+        })
+        group_entry['rows'].append(row)
+        flat_rows[is_latest].append(row)
+
+    return grouped, flat_rows
+
+
+def _build_group_panels(grouped):
+    panels = []
+
+    for year in sorted(grouped.keys(), reverse=True):
+        depts = grouped[year]
+        year_total = sum(len(group_data['rows']) for dept_data in depts.values() for group_data in dept_data.values())
+        for dept in sorted(depts.keys(), key=lambda d: d or ''):
+            groups = depts[dept]
+            dept_total = sum(len(group_data['rows']) for group_data in groups.values())
+            for group_name in sorted(groups.keys()):
+                group_data = groups[group_name]
+                rows = _attach_indexes(group_data['rows'])
+                panels.append({
+                    'year': year,
+                    'year_total': year_total,
+                    'dept': dept,
+                    'dept_total': dept_total,
+                    'group': group_name,
+                    'group_total': len(rows),
+                    'rows': rows,
+                    'files': [{'code': code, 'name': label} for code, label in group_data['doc_types']],
+                    'is_latest': group_data['is_latest'],
+                })
+    return panels
+
+
+def _build_flat_sections(flat_rows):
+    sections = []
+    titles = {
+        False: 'Группы, продолжающие обучение',
+        True: 'Группы выпускного года',
+    }
+
+    for is_latest in (False, True):
+        rows = flat_rows[is_latest]
+        if not rows:
+            continue
+        sections.append({
+            'caption': titles[is_latest],
+            'files': [{'code': code, 'name': label} for code, label in Document.get_doc_types_for_group(is_latest)],
+            'students': _attach_indexes(rows),
+            'is_latest': is_latest,
+        })
+    return sections
+
+
 def page_webd(request):
     foundyear = request.foundyear
     year = Year.objects.all()
     groups = Group.objects.values('name')
-    all_departments = ['ПМиК','ИМО','ГиТ','МА','ТВиАД','ТМОМИ']
-    departments     = [{'value': d}  for d in all_departments]
+    departments     = [{'value': d}  for d in DEPARTMENTS]
     error = None
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -23,7 +200,11 @@ def page_webd(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect('page_identity',foundyear=foundyear)
+            if Student.objects.filter(login=user.username).exists():
+                return redirect('page_identity', foundyear=foundyear)
+            if hasattr(user, 'teacher_profile'):
+                return redirect('teacher_topics')
+            return redirect('page_webd')
         else:
             error = 'Неверный логин или пароль'
     
@@ -43,24 +224,29 @@ def page_login(request):
 
 @login_required(login_url='page_webd')
 def page_identity(request,foundyear):
-    student = Student.objects.get(login=request.user.username)
-    year = Year.objects.get(year=foundyear)
-    enrollment = Enrollment.objects.get(student=student,year=year)
+    student = getattr(request, 'student_profile', None)
+    if not student:
+        messages.error(request, "Раздел доступен только студентам.")
+        return redirect('teacher_topics')
+    try:
+        year = Year.objects.get(year=foundyear)
+        enrollment = Enrollment.objects.get(student=student, year=year)
+    except (Year.DoesNotExist, Enrollment.DoesNotExist):
+        messages.error(request, "Не удалось найти запись обучения для выбранного года.")
+        return redirect('page_webd')
     print(student,enrollment)
     # Подготовка справочников
-    all_positions = ['преподаватель','ст. преподаватель','доцент','профессор','зав. кафедрой','другая']
-    positions = [{'value': p, 'selected': p == enrollment.adviser_position} for p in all_positions]
+    positions = [{'value': value, 'label': label, 'selected': value == enrollment.adviser_position} for value, label in ADVISER_POSITION_CHOICES]
     all_ranks = ['без звания','доцент','профессор']
     ranks     = [{'value': r, 'selected': r == enrollment.adviser_rank}     for r in all_ranks]
-    all_departments = ['ПМиК','ИМО','ГиТ','МА','ТВиАД','ТМОМИ']
-    departments     = [{'value': d, 'selected': d == enrollment.department}  for d in all_departments]
+    departments     = [{'value': d, 'selected': d == enrollment.department}  for d in DEPARTMENTS]
 
     if request.method == 'POST':
         form = StudentForm(request.POST, instance=enrollment)
         if form.is_valid():
             form.save()
             # переход на GET, чтобы обновить student и убрать повторы POST
-            return redirect('page_identity',foundyear=year)
+            return redirect('page_identity', foundyear=year.year)
     else:
         form = StudentForm(instance=enrollment)
 
@@ -79,93 +265,26 @@ def page_identity(request,foundyear):
 
 @login_required(login_url='page_webd')
 def query_view(request):
-    # 1. Сбор и фильтрация записей
-    years      = request.POST.getlist('years')
-    groups     = request.POST.getlist('groups')
-    department = request.POST.get('department', '').strip()
-    name       = request.POST.get('name', '').strip()
-    adviser    = request.POST.get('adviser-name', '').strip()
+    qs, filters = _apply_common_filters(request.POST)
 
-    qs = Enrollment.objects.select_related('student','group','year').all()
-    if years and any(years):
-        qs = qs.filter(year__year__in=[int(y) for y in years if y.isdigit()])
-    if groups and any(groups):
-        qs = qs.filter(group__name__in=groups)
-    if department:
-        qs = qs.filter(department__iexact=department)
-    if name:
-        qs = qs.filter(student__full_name__icontains=name)
-    if adviser:
-        qs = qs.filter(adviser_name__icontains=adviser)
+    grouped, flat_rows = _collect_grouped_rows(qs)
+    panels = _build_group_panels(grouped)
+    flat_sections = _build_flat_sections(flat_rows)
 
-    # 2. Типы документов и заголовок колонок
-    doc_types = Document.DOC_TYPES
-    files = [{'code': code, 'name': label} for code, label in doc_types]
+    if filters['group_method'] == 'flatten':
+        panels = []
+    else:
+        flat_sections = []
 
-    # 3. Формирование «плоского» списка строк
-    flat = []
-    for idx, enroll in enumerate(qs.order_by('-year__year','group__name','student__full_name'), start=1):
-        docs = {d.doc_type: d for d in enroll.documents.all()}
-        sfiles = []
-        for code, _ in doc_types:
-            doc = docs.get(code)
-            sfiles.append({
-                'file':    bool(doc),
-                'in_time': True,
-                'link':    doc.file.url if doc else '',
-            })
-        flat.append({
-            'year':                   enroll.year.year,
-            'department':             enroll.department,
-            'group':                  enroll.group.name,
-            'index':                  idx,
-            'title':                  enroll.title,
-            'name':                   enroll.student.full_name,
-            'logins':                 enroll.student.login,
-            'adviser_name_formatted': enroll.adviser_name,
-            'sfiles':                 sfiles,
-        })
-
-    # 4. Группировка по годам → кафедрам → группам
-    grouped = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    for row in flat:
-        grouped[row['year']][row['department']][row['group']].append(row)
-
-    # 5. Подсчёт количества работ на каждом уровне
-    counts = {}
-    for year, depts in grouped.items():
-        counts[year] = {
-            'total': sum(len(rows) for grp in depts.values() for rows in grp.values()),
-            'departments': {
-                dept: {
-                    'total': sum(len(rows) for rows in groups.values()),
-                    'groups': {grp: len(rows) for grp, rows in groups.items()}
-                }
-                for dept, groups in depts.items()
-            }
-        }
-    panels = []
-    for year, info in counts.items():
-        for dept, dinfo in info['departments'].items():
-            for grp, cnt in dinfo['groups'].items():
-                panels.append({
-                    'year': year,
-                    'year_total': info['total'],
-                    'dept': dept,
-                    'dept_total': dinfo['total'],
-                    'group': grp,
-                    'group_total': cnt,
-                    'rows': grouped[year][dept][grp],
-                })
-
-    return render(request, 'webd_core/page_query.html', {
-        'grouped_data': grouped,
-        'panels':       panels,
-        'files':        files,
-        'admin':        request.user.is_staff,
-        'caption':      'Результаты поиска',
-        'foundyear': request.foundyear
-    })
+    context = {
+        'panels': panels,
+        'admin': request.user.is_staff,
+        'caption': 'Результаты поиска',
+        'foundyear': request.foundyear,
+        'group_method': filters['group_method'],
+        'flat_sections': flat_sections,
+    }
+    return render(request, 'webd_core/page_query.html', context)
 
 def templates_view(request):
     foundyear = request.foundyear
@@ -175,74 +294,20 @@ def templates_view(request):
 
 @login_required(login_url='page_webd')
 def query_report(request):
-    # 1) Фильтры точно как в query_view
-    years      = request.POST.getlist('years')
-    groups     = request.POST.getlist('groups')
-    department = request.POST.get('department', '').strip()
-    name       = request.POST.get('name', '').strip()
-    adviser    = request.POST.get('adviser-name', '').strip()
+    qs, filters = _apply_common_filters(request.POST)
+    grouped, flat_rows = _collect_grouped_rows(qs)
+    panels = _build_group_panels(grouped)
+    flat_sections = _build_flat_sections(flat_rows)
 
-    qs = Enrollment.objects.select_related('student','group','year').all()
-    if years and any(years):
-        qs = qs.filter(year__year__in=[int(y) for y in years if y.isdigit()])
-    if groups and any(groups):
-        qs = qs.filter(group__name__in=groups)
-    if department:
-        qs = qs.filter(department__iexact=department)
-    if name:
-        qs = qs.filter(student__full_name__icontains=name)
-    if adviser:
-        qs = qs.filter(adviser_name__icontains=adviser)
-
-    # 2) Группировка по годам → кафедрам → группам
-    panels = []
-    sorted_qs = qs.order_by('year__year','department','group__name')
-    for year_value, year_qs in itertools.groupby(sorted_qs, key=lambda e: e.year.year):
-        year_list  = list(year_qs)
-        year_total = len(year_list)
-        for dept_value, dept_qs in itertools.groupby(year_list, key=lambda e: e.department):
-            dept_list  = list(dept_qs)
-            dept_total = len(dept_list)
-            for group_value, group_qs in itertools.groupby(dept_list, key=lambda e: e.group.name):
-                group_list  = list(group_qs)
-                group_total = len(group_list)
-
-                # 3) Собираем строки для этой панели
-                rows = []
-                doc_types = Document.DOC_TYPES
-                for idx, enroll in enumerate(group_list, start=1):
-                    docs_by_type = {d.doc_type: d for d in enroll.documents.all()}
-                    sfiles = []
-                    for code, _ in doc_types:
-                        doc = docs_by_type.get(code)
-                        sfiles.append({
-                            'file':    bool(doc),
-                            'in_time': True,
-                            'link':    doc.file.url if doc else '',
-                        })
-                    rows.append({
-                        'index':                  idx,
-                        'title':                  enroll.title,
-                        'name':                   enroll.student.full_name,
-                        'logins':                 enroll.student.login,
-                        'adviser_name_formatted': enroll.adviser_name,
-                        'sfiles':                 sfiles,
-                    })
-
-                panels.append({
-                    'year':        year_value,
-                    'year_total':  year_total,
-                    'dept':        dept_value,
-                    'dept_total':  dept_total,
-                    'group':       group_value,
-                    'group_total': group_total,
-                    'rows':        rows,
-                })
+    if filters['group_method'] == 'flatten':
+        panels = []
+    else:
+        flat_sections = []
 
     context = {
         'panels': panels,
-        'files':  [{'code': c, 'name': l} for c, l in Document.DOC_TYPES],
-        'admin':  request.user.is_staff,
+        'flat_sections': flat_sections,
+        'group_method': filters['group_method'],
     }
     html = render_to_string('webd_core/report_template.html', context)
 
@@ -255,16 +320,24 @@ def query_report(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def upload_view(request,foundyear):
-    student = Student.objects.get(login=request.user.username)
-    year = Year.objects.get(year=foundyear)
-    enrollment = Enrollment.objects.get(student=student,year=year)
+    student = getattr(request, 'student_profile', None)
+    if not student:
+        messages.error(request, "Раздел доступен только студентам.")
+        return redirect('teacher_topics')
+    try:
+        year = Year.objects.get(year=foundyear)
+        enrollment = Enrollment.objects.get(student=student, year=year)
+    except (Year.DoesNotExist, Enrollment.DoesNotExist):
+        messages.error(request, "Не удалось найти запись обучения для выбранного года.")
+        return redirect('page_webd')
     results = {}
+    doc_types = Document.get_doc_types_for_group(enrollment.group.is_latest)
     
     if request.method == "POST":
         doc_type = request.POST.get("for-doc")
 
         # Проверка на валидность типа документа
-        valid_doc_types = dict(Document.DOC_TYPES).keys()
+        valid_doc_types = dict(doc_types).keys()
         if doc_type not in valid_doc_types:
             messages.error(request, "Недопустимый тип документа.")
             return redirect(request.path)
@@ -297,7 +370,7 @@ def upload_view(request,foundyear):
     context = {
         "student": student,
         "enroll":enrollment,
-        "doc_types": Document.DOC_TYPES,
+        "doc_types": doc_types,
         "files": files,
         "results": results,
         "foundyear": foundyear,
@@ -305,6 +378,369 @@ def upload_view(request,foundyear):
 
     return render(request, "webd_core/page_upload.html", context)
 
+
+
+@login_required(login_url='page_webd')
+def teacher_topics_view(request):
+    teacher = getattr(request, 'teacher_profile', None)
+    if not teacher:
+        messages.error(request, "Страница доступна только преподавателям.")
+        return redirect('page_webd')
+
+    topics_qs = teacher.topics.prefetch_related(
+        Prefetch(
+            'requests',
+            queryset=TopicRequest.objects.select_related(
+                'enrollment__student',
+                'enrollment__group'
+            ).order_by('-created_at')
+        )
+    ).order_by('created_at')
+
+    topic_rows = []
+    for idx, topic in enumerate(topics_qs, start=1):
+        requests = list(topic.requests.all())
+        approved = [r for r in requests if r.status == TopicRequest.STATUS_APPROVED]
+        pending = [r for r in requests if r.status == TopicRequest.STATUS_PENDING]
+        topic_rows.append({
+            'topic': topic,
+            'index': idx,
+            'approved': approved,
+            'pending': pending,
+            'free_slots': max(topic.capacity - len(approved), 0),
+        })
+
+    course_choices = COURSE_CHOICES
+
+    def _teacher_department():
+        if teacher.department:
+            return teacher.department
+        return DEPARTMENTS[0]
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create_batch':
+            titles = request.POST.getlist('title[]')
+            descriptions = request.POST.getlist('description[]')
+            courses = request.POST.getlist('course[]')
+            capacities = request.POST.getlist('capacity[]')
+
+            created = 0
+            errors = []
+            for idx, title in enumerate(titles):
+                title = (title or '').strip()
+                if not title:
+                    continue
+                description = (descriptions[idx] if idx < len(descriptions) else '').strip()
+                course_val = _parse_course(courses[idx] if idx < len(courses) else None)
+                capacity_val = _parse_course(capacities[idx] if idx < len(capacities) else None)
+                if course_val not in [choice[0] for choice in COURSE_CHOICES]:
+                    errors.append(f"Строка {idx+1}: некорректный курс.")
+                    continue
+                if not capacity_val or capacity_val < 1:
+                    errors.append(f"Строка {idx+1}: количество студентов должно быть положительным.")
+                    continue
+
+                Topic.objects.create(
+                    teacher=teacher,
+                    title=title,
+                    description=description,
+                    department=_teacher_department(),
+                    course=course_val,
+                    capacity=capacity_val,
+                    is_active=True,
+                )
+                created += 1
+            if errors:
+                for err in errors:
+                    messages.error(request, err)
+            if created:
+                messages.success(request, f"Добавлено тем: {created}")
+            if created or errors:
+                return redirect('teacher_topics')
+        elif action == 'update_topic':
+            if _handle_topic_update(request, teacher):
+                return redirect('teacher_topics')
+        elif action == 'delete_topic':
+            topic_id = request.POST.get('topic_id')
+            _handle_topic_delete(request, teacher, topic_id)
+            return redirect('teacher_topics')
+        elif action == 'decision':
+            request_id = request.POST.get('request_id')
+            decision = request.POST.get('decision')
+            comment = request.POST.get('comment', '').strip()
+            if _handle_topic_decision(teacher, request_id, decision, comment, request):
+                return redirect('teacher_topics')
+
+    context = {
+        'topic_rows': topic_rows,
+        'course_choices': course_choices,
+        'page_teacher_topics': True,
+        'foundyear': request.foundyear,
+    }
+    return render(request, 'webd_core/page_teacher_topics.html', context)
+
+
+@login_required(login_url='page_webd')
+def student_topics_view(request):
+    student = getattr(request, 'student_profile', None)
+    if not student:
+        messages.error(request, "Страница доступна только студентам.")
+        return redirect('teacher_topics')
+    try:
+        year = Year.objects.get(year=request.foundyear)
+        enrollment = Enrollment.objects.get(student=student, year=year)
+    except (Year.DoesNotExist, Enrollment.DoesNotExist):
+        messages.error(request, "Не найдена запись обучения для выбранного года.")
+        return redirect('page_webd')
+
+    dept_param = request.GET.get('department')
+    if dept_param is None:
+        selected_department = enrollment.department or ''
+    else:
+        selected_department = dept_param
+    student_course = _parse_course(enrollment.courses)
+
+    if request.method == 'POST':
+        selected_department = request.POST.get('department', selected_department)
+        topic_id = request.POST.get('topic_id')
+        if topic_id:
+            _create_topic_request(enrollment, topic_id, request)
+        redirect_url = reverse('student_topics')
+        if selected_department:
+            redirect_url = f"{redirect_url}?department={selected_department}"
+        return redirect(redirect_url)
+
+    topics_qs = Topic.objects.filter(is_active=True)
+    if student_course:
+        topics_qs = topics_qs.filter(course=student_course)
+    if selected_department:
+        topics_qs = topics_qs.filter(department=selected_department)
+    topics_qs = topics_qs.select_related('teacher').prefetch_related(
+        Prefetch(
+            'requests',
+            queryset=TopicRequest.objects.select_related(
+                'enrollment__student', 'enrollment__group'
+            )
+        )
+    ).order_by('created_at')
+
+    requests_qs = TopicRequest.objects.filter(enrollment=enrollment).select_related('topic', 'topic__teacher')
+    request_map = {req.topic_id: req for req in requests_qs}
+    approved_request = next((req for req in requests_qs if req.status == TopicRequest.STATUS_APPROVED), None)
+    student_has_pending = any(req.status == TopicRequest.STATUS_PENDING for req in requests_qs)
+
+    departments = [{'value': d, 'selected': d == selected_department} for d in DEPARTMENTS]
+
+    topic_entries = []
+    for idx, topic in enumerate(topics_qs, start=1):
+        topic_requests = list(topic.requests.all())
+        approved = [r for r in topic_requests if r.status == TopicRequest.STATUS_APPROVED]
+        pending = [r for r in topic_requests if r.status == TopicRequest.STATUS_PENDING]
+        free_slots = max(topic.capacity - len(approved), 0)
+        topic_entries.append({
+            'topic': topic,
+            'index': idx,
+            'approved': approved,
+            'pending': pending,
+            'free_slots': free_slots,
+            'student_request': request_map.get(topic.id),
+        })
+
+    grouped_view = not selected_department
+    topic_groups = []
+    if grouped_view:
+        dept_map = {}
+        for entry in topic_entries:
+            dept = entry['topic'].department or 'Не указано'
+            dept_map.setdefault(dept, []).append(entry)
+        for dept in sorted(dept_map.keys(), key=lambda d: DEPARTMENTS.index(d) if d in DEPARTMENTS else d):
+            topic_groups.append({'department': dept, 'entries': dept_map[dept]})
+
+    context = {
+        'topic_entries': topic_entries if not grouped_view else [],
+        'topic_groups': topic_groups,
+        'grouped_view': grouped_view,
+        'departments': departments,
+        'selected_department': selected_department,
+        'request_map': request_map,
+        'approved_request': approved_request,
+        'student_has_pending': student_has_pending,
+        'page_topic_select': True,
+        'foundyear': request.foundyear,
+        'student_course': student_course,
+    }
+    return render(request, 'webd_core/page_topic_select.html', context)
+
+
+def _handle_topic_decision(teacher, request_id, decision, comment, request):
+    topic_request = TopicRequest.objects.filter(id=request_id, topic__teacher=teacher).select_related('topic', 'enrollment__student').first()
+    if not topic_request:
+        messages.error(request, "Заявка не найдена.")
+        return True
+
+    if decision == 'approve':
+        if _approve_topic_request(topic_request, comment, request):
+            messages.success(request, f"Заявка студента {topic_request.enrollment.student.full_name} принята.")
+        return True
+    if decision == 'reject':
+        _reject_topic_request(topic_request, comment)
+        messages.info(request, f"Заявка студента {topic_request.enrollment.student.full_name} отклонена.")
+        return True
+
+    messages.error(request, "Неизвестное действие.")
+    return False
+
+
+def _handle_topic_update(request, teacher):
+    topic_id = request.POST.get('topic_id')
+    if not topic_id:
+        messages.error(request, "Не указана тема для обновления.")
+        return False
+    topic = Topic.objects.filter(id=topic_id, teacher=teacher).first()
+    if not topic:
+        messages.error(request, "Тема не найдена.")
+        return False
+
+    title = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    course = request.POST.get('course')
+    capacity = request.POST.get('capacity')
+
+    errors = []
+    if not title:
+        errors.append("Название темы обязательно.")
+    try:
+        course_int = int(course)
+        if course_int not in [choice[0] for choice in COURSE_CHOICES]:
+            raise ValueError
+    except (TypeError, ValueError):
+        errors.append("Некорректное значение курса.")
+
+    try:
+        capacity_int = int(capacity)
+        if capacity_int < 1:
+            raise ValueError
+    except (TypeError, ValueError):
+        errors.append("Количество студентов должно быть положительным числом.")
+
+    if errors:
+        for err in errors:
+            messages.error(request, err)
+        return False
+
+    topic.title = title
+    topic.description = description
+    topic.course = course_int
+    topic.capacity = capacity_int
+    topic.save(update_fields=['title', 'description', 'course', 'capacity', 'updated_at'])
+    messages.success(request, "Данные темы обновлены.")
+    return True
+
+
+def _approve_topic_request(topic_request, comment, request):
+    now = timezone.now()
+    topic = topic_request.topic
+    current_approved = topic.requests.filter(status=TopicRequest.STATUS_APPROVED).exclude(id=topic_request.id).count()
+    if current_approved >= topic.capacity:
+        messages.error(request, "Достигнут лимит студентов для этой темы.")
+        return False
+    with transaction.atomic():
+        topic_request.status = TopicRequest.STATUS_APPROVED
+        topic_request.comment = comment
+        topic_request.decided_at = now
+        topic_request.save(update_fields=['status', 'comment', 'decided_at'])
+
+        enrollment = topic_request.enrollment
+        topic = topic_request.topic
+        enrollment.title = topic.title
+        enrollment.adviser_name = topic.teacher.full_name
+        enrollment.department = topic.department
+        enrollment.adviser_position = topic.teacher.adviser_position
+        enrollment.save(update_fields=['title', 'adviser_name', 'department', 'adviser_position'])
+
+        TopicRequest.objects.filter(enrollment=enrollment).exclude(id=topic_request.id).update(
+            status=TopicRequest.STATUS_REJECTED,
+            comment='Заявка отклонена: выбрана другая тема',
+            decided_at=now,
+        )
+
+        if current_approved + 1 >= topic.capacity:
+            TopicRequest.objects.filter(topic=topic, status=TopicRequest.STATUS_PENDING).exclude(id=topic_request.id).update(
+                status=TopicRequest.STATUS_REJECTED,
+                comment='Лимит по теме достигнут',
+                decided_at=now,
+            )
+    return True
+
+
+def _handle_topic_delete(request, teacher, topic_id):
+    topic = Topic.objects.filter(id=topic_id, teacher=teacher).first()
+    if not topic:
+        messages.error(request, "Тема не найдена.")
+        return False
+
+    with transaction.atomic():
+        TopicRequest.objects.filter(topic=topic).update(
+            status=TopicRequest.STATUS_REJECTED,
+            comment='Тема удалена преподавателем',
+            decided_at=timezone.now()
+        )
+        TopicRequest.objects.filter(topic=topic).delete()
+        Enrollment.objects.filter(
+            title=topic.title,
+            adviser_name=topic.teacher.full_name,
+            department=topic.department
+        ).update(title='', adviser_name='', department='', adviser_position='')
+        topic.delete()
+        messages.success(request, "Тема удалена.")
+    return True
+def _reject_topic_request(topic_request, comment):
+    topic_request.status = TopicRequest.STATUS_REJECTED
+    topic_request.comment = comment
+    topic_request.decided_at = timezone.now()
+    topic_request.save(update_fields=['status', 'comment', 'decided_at'])
+
+
+def _create_topic_request(enrollment, topic_id, request):
+    topic = Topic.objects.filter(id=topic_id).select_related('teacher').first()
+    if not topic:
+        messages.error(request, "Тема не найдена.")
+        return
+    if not topic.is_active:
+        messages.error(request, "Тема уже недоступна.")
+        return
+    if TopicRequest.objects.filter(
+        enrollment=enrollment,
+        status=TopicRequest.STATUS_PENDING
+    ).exclude(topic=topic).exists():
+        messages.info(request, "У вас уже есть заявка, ожидающая решения. Дождитесь ответа преподавателя.")
+        return
+    approved_count = topic.requests.filter(status=TopicRequest.STATUS_APPROVED).count()
+    if approved_count >= topic.capacity:
+        messages.info(request, "Лимит студентов для этой темы исчерпан.")
+        return
+    if TopicRequest.objects.filter(enrollment=enrollment, status=TopicRequest.STATUS_APPROVED).exists():
+        messages.info(request, "У вас уже есть утверждённая тема.")
+        return
+
+    topic_request, created = TopicRequest.objects.get_or_create(topic=topic, enrollment=enrollment)
+    if created:
+        messages.success(request, "Заявка отправлена преподавателю.")
+        return
+
+    if topic_request.status == TopicRequest.STATUS_PENDING:
+        messages.info(request, "Заявка уже находится на рассмотрении.")
+        return
+    if topic_request.status == TopicRequest.STATUS_REJECTED:
+        topic_request.status = TopicRequest.STATUS_PENDING
+        topic_request.comment = ''
+        topic_request.decided_at = None
+        topic_request.save(update_fields=['status', 'comment', 'decided_at'])
+        messages.success(request, "Заявка повторно отправлена.")
+        return
+
+    messages.info(request, "По этой теме уже принято решение.")
 
 
 def logout_view(request):

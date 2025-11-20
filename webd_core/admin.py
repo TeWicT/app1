@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Year, Group, Student, Enrollment, Document
+from .models import Year, Group, Student, Enrollment, Document, TeacherProfile, Topic, TopicRequest
 
 class EnrollmentInline(admin.TabularInline):
     model = Enrollment
@@ -20,8 +20,8 @@ class YearAdmin(admin.ModelAdmin):
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "year")
-    list_filter  = ("year",)
+    list_display = ("id", "name", "year", "is_latest")
+    list_filter  = ("year", "is_latest")
     search_fields= ("name",)
 
 @admin.register(Student)
@@ -38,3 +38,24 @@ class DocumentAdmin(admin.ModelAdmin):
     list_display   = ("id", "enrollment", "doc_type", "uploaded_at")
     list_filter    = ("doc_type",)
     search_fields  = ("enrollment__student__login",)
+
+
+@admin.register(TeacherProfile)
+class TeacherProfileAdmin(admin.ModelAdmin):
+    list_display = ("full_name", "department", "adviser_position", "user")
+    search_fields = ("full_name", "user__username")
+    list_filter = ("department", "adviser_position")
+
+
+@admin.register(Topic)
+class TopicAdmin(admin.ModelAdmin):
+    list_display = ("title", "teacher", "department", "course", "capacity", "is_active", "created_at")
+    list_filter = ("department", "course", "is_active")
+    search_fields = ("title", "teacher__full_name")
+
+
+@admin.register(TopicRequest)
+class TopicRequestAdmin(admin.ModelAdmin):
+    list_display = ("topic", "enrollment", "status", "created_at", "decided_at")
+    list_filter = ("status", "topic__department")
+    search_fields = ("topic__title", "enrollment__student__full_name")

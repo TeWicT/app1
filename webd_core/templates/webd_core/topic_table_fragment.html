@@ -1,0 +1,97 @@
+<div class="topics-table-wrapper">
+    <table class="student-topics-table">
+        <thead>
+            <tr>
+                <th>№</th>
+                <th>Тема</th>
+                <th>Курс</th>
+                <th>Мест всего</th>
+                <th>Свободно</th>
+                <th>Студенты</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for entry in rows %}
+            {% with topic=entry.topic %}
+            <tr>
+                <td>{{ entry.index }}</td>
+                <td>
+                    <details class="topic-details">
+                        <summary>{{ topic.title }}</summary>
+                        <div class="topic-description">
+                            {{ topic.description|default:"Описание не задано" }}
+                        </div>
+                    </details>
+                    <div class="topic-meta">Преподаватель: {{ topic.teacher.full_name }} ({{ topic.teacher.adviser_position }})</div>
+                </td>
+                <td>{{ topic.course }}</td>
+                <td>{{ topic.capacity }}</td>
+                <td>{{ entry.free_slots }}</td>
+                <td>
+                    {% if entry.approved %}
+                        <ul class="student-list">
+                            {% for req in entry.approved %}
+                            <li>
+                                {{ req.enrollment.student.full_name }}
+                                {% if req.enrollment.group %}({{ req.enrollment.group.name }}){% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <span class="muted">Студентов пока нет</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% with req=entry.student_request %}
+                        {% if approved_request %}
+                            {% if not req or req.status != 'approved' %}
+                                <span class="muted">У вас уже утверждена тема</span>
+                            {% else %}
+                                <div class="request-status">
+                                    Статус: {{ req.get_status_display }}
+                                    {% if req.comment %}
+                                    <div class="muted">Комментарий: {{ req.comment }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% elif req %}
+                            <div class="request-status">
+                                Статус: {{ req.get_status_display }}
+                                {% if req.comment %}
+                                <div class="muted">Комментарий: {{ req.comment }}</div>
+                                {% endif %}
+                            </div>
+                            {% if req.status == 'rejected' and entry.free_slots > 0 %}
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="department" value="{{ selected_department }}"/>
+                                <input type="hidden" name="topic_id" value="{{ topic.id }}"/>
+                                <button type="submit" class="inp">Подать повторно</button>
+                            </form>
+                            {% endif %}
+                        {% elif student_has_pending %}
+                            <span class="muted">Ожидайте решения по текущей заявке</span>
+                        {% elif entry.free_slots <= 0 %}
+                            <span class="muted">Лимит исчерпан</span>
+                        {% else %}
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="department" value="{{ selected_department }}"/>
+                                <input type="hidden" name="topic_id" value="{{ topic.id }}"/>
+                                <button type="submit" class="inp">Подать заявку</button>
+                            </form>
+                        {% endif %}
+                    {% endwith %}
+                </td>
+            </tr>
+            {% endwith %}
+        {% empty %}
+            <tr>
+                <td colspan="7">Нет доступных тем для вашего курса.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+

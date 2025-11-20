@@ -49,7 +49,7 @@
 				<option value="" disabled="disabled" selected="selected"></option>
                 {% for p in positions %}
                 <option value="{{p.value}}" {%if p.selected %}selected="selected"{% endif %}>
-                    {{p.value}}
+                    {{p.label}}
                 </option>
                 {% endfor %}
 			</select>

@@ -1,0 +1,39 @@
+{% extends "webd_core/layout.html" %}
+{% load custom_filters %}
+
+{% block title %}Выбор темы{% endblock %}
+
+{% block content %}
+<div class="webd_topic_select">
+    {% include "webd_core/user_header.html" with page_topic_select=True %}
+
+    <h2>Выбор темы для {{ student_course|default:"?" }} курса</h2>
+
+    <form method="get" class="topic-filter">
+        <label for="department">Кафедра</label>
+        <select name="department" id="department" class="inp txt_inp">
+            <option value="">Все кафедры</option>
+            {% for dept in departments %}
+            <option value="{{ dept.value }}" {% if dept.selected %}selected{% endif %}>{{ dept.value }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="inp">Показать</button>
+    </form>
+
+    {% if approved_request %}
+    <div class="info-box">
+        <strong>У вас утверждена тема:</strong> {{ approved_request.topic.title }} ({{ approved_request.topic.teacher.full_name }})
+    </div>
+    {% endif %}
+
+    {% if grouped_view %}
+        {% for group in topic_groups %}
+        <h3>Кафедра: {{ group.department }}</h3>
+        {% include "webd_core/topic_table_fragment.html" with rows=group.entries selected_department=selected_department approved_request=approved_request student_has_pending=student_has_pending %}
+        {% endfor %}
+    {% else %}
+        {% include "webd_core/topic_table_fragment.html" with rows=topic_entries selected_department=selected_department approved_request=approved_request student_has_pending=student_has_pending %}
+    {% endif %}
+</div>
+{% endblock %}
+

@@ -1,6 +1,11 @@
 from django import forms
-from .models import Enrollment, Document,Student
-
+from .models import (
+    Enrollment,
+    Document,
+    DEPARTMENT_CHOICES,
+    ADVISER_POSITION_CHOICES,
+    COURSE_CHOICES,
+)
 
 
 class DocumentForm(forms.ModelForm):
@@ -11,6 +16,8 @@ class DocumentForm(forms.ModelForm):
             'doc_type': forms.Select(attrs={'class': 'form-control'}),
             'file':     forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
         }
+
+
 class StudentForm(forms.ModelForm):
     class Meta:
         model = Enrollment
@@ -28,6 +35,9 @@ class StudentForm(forms.ModelForm):
             'adviser_position': forms.Select(attrs={'class': 'form-control'}),
             'adviser_status': forms.TextInput(attrs={'class': 'form-control'}),
             'adviser_rank': forms.Select(attrs={'class': 'form-control'}),
-            'department': forms.TextInput(attrs={'class': 'form-control'}),
+            'department': forms.Select(choices=DEPARTMENT_CHOICES, attrs={'class': 'form-control'}),
             'title': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+
+

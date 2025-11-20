@@ -4,12 +4,20 @@
         презентаций</a>
     {% if request.user.is_authenticated %}
     |
-    {% if request.user.is_authenticated  %}
+    {% if request.teacher_profile %}
+    <a href="{% url 'teacher_topics' %}" {% if page_teacher_topics %}class="user_no_file"{% endif %}>
+        Предложить тему{% if request.pending_request_count %} ({{ request.pending_request_count }}){% endif %}
+    </a> |
+    {% else %}
+    <a href="{% url 'student_topics' %}" {% if page_topic_select %}class="user_no_file"{% endif %}>
+        Выбрать тему
+        {% if request.topic_notifications.decided %}
+            ({{ request.topic_notifications.decided }})
+        {% endif %}
+    </a> |
     <a href="{% url 'page_identity' foundyear=foundyear %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
         работы</a> |
     <a href="{% url "page_upload" foundyear=foundyear %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
-    {% else %}
-    <a href="/query-adviser" {% if page_adviser %}class="user_no_file" {% endif %}>Руководство</a> |
     {% endif %}
     <a href="/login/exit">Выход</a>
     {% else %}
@@ -19,11 +27,11 @@
               title="После авторизации доступно: регистрация работ, изменение личных данных, добавление и удаление файлов отчетов">
               {% csrf_token %}
             <input placeholder="Имя пользователя" type="text" name="username"
-                   id="inp_username" class="inp txt_inp" maxlength="15"
+                   id="inp_username" class="inp txt_inp" maxlength="150"
                    title="Вход доступен с помощью логина и пароля студента в сервисах кафедры ИМО (например, сервер kappa или сервис moodle)"
                    autofocus/>
             <input placeholder="Пароль" type="password" name="password"
-                   id="inp_password" class="inp txt_inp" maxlength="15"
+                   id="inp_password" class="inp txt_inp" maxlength="128"
                    title="Вход доступен с помощью логина и пароля студента в сервисах кафедры ИМО (например, сервер kappa или сервис moodle)"/>
             <input type="submit" id="btn_login" value="Войти" class="inp"/>
             <div id="login_response">{{response}}</div>
