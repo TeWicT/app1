@@ -4,6 +4,186 @@
 {% block title %}Выбор темы{% endblock %}
 
 {% block content %}
+<!-- Animate.css для плавных анимаций -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+
+<style>
+    /* Обеспечиваем одинаковую ширину всех таблиц */
+    .topics-table-wrapper {
+        width: 100%;
+        margin-bottom: 30px;
+    }
+    
+    .student-topics-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+    
+    /* Фиксированные ширины колонок для всех таблиц */
+    .student-topics-table th:nth-child(1),
+    .student-topics-table td:nth-child(1) { width: 4%; }  /* № */
+    
+    .student-topics-table th:nth-child(2),
+    .student-topics-table td:nth-child(2) { width: 30%; } /* Тема */
+    
+    .student-topics-table th:nth-child(3),
+    .student-topics-table td:nth-child(3) { width: 6%; }  /* Курс */
+    
+    .student-topics-table th:nth-child(4),
+    .student-topics-table td:nth-child(4) { width: 8%; }  /* Мест всего */
+    
+    .student-topics-table th:nth-child(5),
+    .student-topics-table td:nth-child(5) { width: 8%; }  /* Свободно */
+    
+    .student-topics-table th:nth-child(6),
+    .student-topics-table td:nth-child(6) { width: 24%; } /* Студенты */
+    
+    .student-topics-table th:nth-child(7),
+    .student-topics-table td:nth-child(7) { width: 20%; } /* Действие */
+    
+    /* Перенос длинного текста */
+    .student-topics-table td {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        vertical-align: top;
+        padding: 8px;
+    }
+    
+    .student-topics-table th {
+        padding: 8px;
+        text-align: left;
+    }
+    
+    /* Плавная анимация для раскрытия описания темы с эффектом разворота свитка */
+    .topic-details {
+        margin: 0;
+    }
+    
+    .topic-details summary {
+        cursor: pointer;
+        font-weight: 500;
+        padding: 4px 0;
+        list-style: none;
+        position: relative;
+        padding-left: 20px;
+        user-select: none;
+    }
+    
+    .topic-details summary::-webkit-details-marker {
+        display: none;
+    }
+    
+    .topic-details summary::before {
+        content: '▶';
+        position: absolute;
+        left: 0;
+        transition: transform 0.3s ease;
+        display: inline-block;
+    }
+    
+    .topic-details[open] summary::before {
+        transform: rotate(90deg);
+    }
+    
+    .topic-details .topic-description {
+        overflow: hidden;
+        padding: 0 0 0 20px;
+        margin: 0;
+        height: 0;
+        opacity: 0;
+        visibility: hidden;
+        transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.5s ease-in 0.2s,
+                    padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    visibility 0s linear 0.6s;
+    }
+    
+    .topic-details .topic-description.expanding {
+        opacity: 1 !important;
+        visibility: visible !important;
+        padding: 12px 0 12px 20px;
+        margin-top: 8px;
+        transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.5s ease-in 0.1s,
+                    padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    visibility 0s linear 0s;
+    }
+    
+    .topic-details .topic-description.collapsing {
+        opacity: 0;
+        visibility: hidden;
+        transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.3s ease-out,
+                    padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                    margin 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                    visibility 0s linear 0.5s;
+    }
+    
+    /* Убеждаемся, что текст виден когда открыто */
+    .topic-details[open] .topic-description {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    
+    /* Стили для красивых кнопок (в стиле Bootstrap, но изолированные) */
+    .btn {
+        display: inline-block;
+        font-weight: 400;
+        line-height: 1.5;
+        color: #212529;
+        text-align: center;
+        text-decoration: none;
+        vertical-align: middle;
+        cursor: pointer;
+        user-select: none;
+        background-color: transparent;
+        border: 1px solid transparent;
+        padding: 6px 16px;
+        font-size: 12pt;
+        font-family: serif;
+        border-radius: 4px;
+        transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    
+    .btn-primary {
+        color: #fff;
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-primary:hover {
+        color: #fff;
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+    
+    .btn-primary:focus {
+        color: #fff;
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.5);
+    }
+    
+    .btn-outline-primary {
+        color: #0d6efd;
+        border-color: #0d6efd;
+        background-color: transparent;
+    }
+    
+    .btn-outline-primary:hover {
+        color: #fff;
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-outline-primary:focus {
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.5);
+    }
+</style>
+
 <div class="webd_topic_select">
     {% include "webd_core/user_header.html" with page_topic_select=True %}
 
@@ -26,14 +206,171 @@
     </div>
     {% endif %}
 
-    {% if grouped_view %}
-        {% for group in topic_groups %}
-        <h3>Кафедра: {{ group.department }}</h3>
-        {% include "webd_core/topic_table_fragment.html" with rows=group.entries selected_department=selected_department approved_request=approved_request student_has_pending=student_has_pending %}
-        {% endfor %}
-    {% else %}
-        {% include "webd_core/topic_table_fragment.html" with rows=topic_entries selected_department=selected_department approved_request=approved_request student_has_pending=student_has_pending %}
-    {% endif %}
+    {% for group in topic_groups %}
+    <h3>Кафедра: {{ group.department }}{% if group.direction %} - Направление: {{ group.direction }}{% endif %}</h3>
+    {% include "webd_core/topic_table_fragment.html" with rows=group.entries selected_department=selected_department approved_request=approved_request student_has_pending=student_has_pending %}
+    {% endfor %}
 </div>
+
+<script>
+// Плавная анимация разворота как свиток (сверху вниз) с защитой от множественных кликов
+document.addEventListener('DOMContentLoaded', function() {
+    const detailsElements = document.querySelectorAll('.topic-details');
+    
+    detailsElements.forEach(function(details) {
+        const summary = details.querySelector('summary');
+        const description = details.querySelector('.topic-description');
+        
+        if (!summary || !description) return;
+        
+        // Флаг для отслеживания состояния анимации
+        let isAnimating = false;
+        let animationTimeout = null;
+        
+        // Предотвращаем стандартное поведение details
+        summary.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Игнорируем клики во время анимации
+            if (isAnimating) {
+                return;
+            }
+            
+            const isOpen = details.hasAttribute('open');
+            
+            if (isOpen) {
+                // Закрываем
+                isAnimating = true;
+                collapseDescription(description, function() {
+                    details.removeAttribute('open');
+                    isAnimating = false;
+                });
+            } else {
+                // Открываем
+                isAnimating = true;
+                details.setAttribute('open', '');
+                expandDescription(description, function() {
+                    isAnimating = false;
+                });
+            }
+        });
+        
+        // Инициализация состояния
+        if (details.hasAttribute('open')) {
+            // Если уже открыт, устанавливаем финальное состояние без анимации
+            const targetHeight = description.scrollHeight;
+            description.style.height = targetHeight + 'px';
+            description.style.opacity = '1';
+            description.style.visibility = 'visible';
+            description.style.padding = '12px 0 12px 20px';
+            description.style.marginTop = '8px';
+            // После небольшой задержки устанавливаем auto
+            setTimeout(function() {
+                description.style.height = 'auto';
+            }, 100);
+        } else {
+            // Закрытое состояние
+            description.style.height = '0';
+            description.style.opacity = '0';
+            description.style.visibility = 'hidden';
+            description.style.padding = '0 0 0 20px';
+            description.style.marginTop = '0';
+        }
+    });
+    
+    function expandDescription(element, callback) {
+        // Очищаем предыдущие таймауты
+        if (element._animationTimeout) {
+            clearTimeout(element._animationTimeout);
+        }
+        
+        // Убираем все классы
+        element.classList.remove('expanding', 'collapsing');
+        
+        // Сохраняем текущую высоту (0)
+        const startHeight = 0;
+        
+        // Временно показываем для измерения реальной высоты
+        element.style.height = 'auto';
+        element.style.visibility = 'hidden';
+        element.style.display = 'block';
+        const targetHeight = element.scrollHeight;
+        
+        // Возвращаем в начальное состояние
+        element.style.visibility = 'visible';
+        element.style.display = '';
+        element.style.height = startHeight + 'px';
+        element.style.opacity = '0';
+        element.style.visibility = 'hidden';
+        element.style.padding = '0 0 0 20px';
+        element.style.marginTop = '0';
+        
+        // Принудительный reflow
+        element.offsetHeight;
+        
+        // Добавляем класс для анимации
+        element.classList.add('expanding');
+        
+        // Запускаем анимацию высоты
+        requestAnimationFrame(function() {
+            element.style.height = targetHeight + 'px';
+            element.style.opacity = '1';
+            element.style.visibility = 'visible';
+        });
+        
+        // После завершения анимации устанавливаем auto для адаптивности
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = 'auto';
+            element.classList.remove('expanding');
+            if (callback) callback();
+        }, 600);
+    }
+    
+    function collapseDescription(element, callback) {
+        // Очищаем предыдущие таймауты
+        if (element._animationTimeout) {
+            clearTimeout(element._animationTimeout);
+        }
+        
+        // Убираем все классы
+        element.classList.remove('expanding', 'collapsing');
+        
+        // Если было auto, нужно получить реальную высоту
+        if (element.style.height === 'auto' || !element.style.height) {
+            element.style.height = element.scrollHeight + 'px';
+        }
+        
+        // Сохраняем текущую высоту
+        const startHeight = parseFloat(element.style.height) || element.scrollHeight;
+        element.style.height = startHeight + 'px';
+        
+        // Принудительный reflow
+        element.offsetHeight;
+        
+        // Добавляем класс для анимации закрытия
+        element.classList.add('collapsing');
+        
+        // Запускаем анимацию
+        requestAnimationFrame(function() {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+            element.style.visibility = 'hidden';
+            element.style.padding = '0 0 0 20px';
+            element.style.marginTop = '0';
+        });
+        
+        // После завершения анимации
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = '';
+            element.style.opacity = '';
+            element.style.visibility = '';
+            element.style.padding = '';
+            element.style.marginTop = '';
+            element.classList.remove('collapsing');
+            if (callback) callback();
+        }, 500);
+    }
+});
+</script>
 {% endblock %}
 

@@ -190,8 +190,8 @@ def _build_flat_sections(flat_rows):
 
 def page_webd(request):
     foundyear = request.foundyear
-    year = Year.objects.all()
-    groups = Group.objects.values('name')
+    year = Year.objects.values_list('year', flat=True)
+    groups = Group.objects.filter(year__year=foundyear).values('name').distinct()
     departments     = [{'value': d}  for d in DEPARTMENTS]
     error = None
     if request.method == 'POST':
@@ -397,18 +397,50 @@ def teacher_topics_view(request):
         )
     ).order_by('created_at')
 
-    topic_rows = []
-    for idx, topic in enumerate(topics_qs, start=1):
+    # Группировка тем: свободные и по курсам
+    free_topics = []
+    course_topics = {}  # {course: [topic_rows]}
+    
+    for topic in topics_qs:
         requests = list(topic.requests.all())
         approved = [r for r in requests if r.status == TopicRequest.STATUS_APPROVED]
         pending = [r for r in requests if r.status == TopicRequest.STATUS_PENDING]
-        topic_rows.append({
+        free_slots = max(topic.capacity - len(approved), 0)
+        
+        topic_row = {
             'topic': topic,
-            'index': idx,
             'approved': approved,
             'pending': pending,
-            'free_slots': max(topic.capacity - len(approved), 0),
-        })
+            'free_slots': free_slots,
+        }
+        
+        # Если есть свободные места, добавляем в свободные темы
+        if free_slots > 0:
+            free_topics.append(topic_row)
+        else:
+            # Иначе группируем по курсу студентов
+            if approved:
+                # Берем курс первого одобренного студента
+                first_student_course = _parse_course(approved[0].enrollment.courses)
+                if first_student_course:
+                    course_topics.setdefault(first_student_course, []).append(topic_row)
+                else:
+                    # Если курс не определен, добавляем в свободные
+                    free_topics.append(topic_row)
+            else:
+                # Если нет одобренных, но нет свободных мест (не должно быть, но на всякий случай)
+                free_topics.append(topic_row)
+    
+    # Добавляем индексы для каждой группы
+    idx_counter = 1
+    for topic_row in free_topics:
+        topic_row['index'] = idx_counter
+        idx_counter += 1
+    
+    for course in sorted(course_topics.keys(), reverse=True):
+        for topic_row in course_topics[course]:
+            topic_row['index'] = idx_counter
+            idx_counter += 1
 
     course_choices = COURSE_CHOICES
 
@@ -422,6 +454,7 @@ def teacher_topics_view(request):
         if action == 'create_batch':
             titles = request.POST.getlist('title[]')
             descriptions = request.POST.getlist('description[]')
+            directions = request.POST.getlist('direction[]')
             courses = request.POST.getlist('course[]')
             capacities = request.POST.getlist('capacity[]')
 
@@ -432,6 +465,7 @@ def teacher_topics_view(request):
                 if not title:
                     continue
                 description = (descriptions[idx] if idx < len(descriptions) else '').strip()
+                direction = (directions[idx] if idx < len(directions) else '').strip()
                 course_val = _parse_course(courses[idx] if idx < len(courses) else None)
                 capacity_val = _parse_course(capacities[idx] if idx < len(capacities) else None)
                 if course_val not in [choice[0] for choice in COURSE_CHOICES]:
@@ -445,6 +479,7 @@ def teacher_topics_view(request):
                     teacher=teacher,
                     title=title,
                     description=description,
+                    direction=direction,
                     department=_teacher_department(),
                     course=course_val,
                     capacity=capacity_val,
@@ -457,9 +492,19 @@ def teacher_topics_view(request):
             if created:
                 messages.success(request, f"Добавлено тем: {created}")
             if created or errors:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({'success': created > 0, 'created': created, 'errors': errors})
                 return redirect('teacher_topics')
         elif action == 'update_topic':
-            if _handle_topic_update(request, teacher):
+            result, error_messages = _handle_topic_update(request, teacher)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                if result:
+                    return JsonResponse({'success': True})
+                else:
+                    return JsonResponse({'success': False, 'errors': error_messages or ['Ошибка обновления']}, status=400)
+            if result:
                 return redirect('teacher_topics')
         elif action == 'delete_topic':
             topic_id = request.POST.get('topic_id')
@@ -472,8 +517,13 @@ def teacher_topics_view(request):
             if _handle_topic_decision(teacher, request_id, decision, comment, request):
                 return redirect('teacher_topics')
 
+    # Сортируем курсы по убыванию для отображения
+    sorted_courses = sorted(course_topics.keys(), reverse=True) if course_topics else []
+    
     context = {
-        'topic_rows': topic_rows,
+        'free_topics': free_topics,
+        'course_topics': course_topics,
+        'sorted_courses': sorted_courses,
         'course_choices': course_choices,
         'page_teacher_topics': True,
         'foundyear': request.foundyear,
@@ -547,18 +597,29 @@ def student_topics_view(request):
             'student_request': request_map.get(topic.id),
         })
 
-    grouped_view = not selected_department
+    # Всегда группируем по кафедрам и направлениям
     topic_groups = []
-    if grouped_view:
-        dept_map = {}
-        for entry in topic_entries:
-            dept = entry['topic'].department or 'Не указано'
-            dept_map.setdefault(dept, []).append(entry)
-        for dept in sorted(dept_map.keys(), key=lambda d: DEPARTMENTS.index(d) if d in DEPARTMENTS else d):
-            topic_groups.append({'department': dept, 'entries': dept_map[dept]})
+    dept_map = {}
+    for entry in topic_entries:
+        dept = entry['topic'].department or 'Не указано'
+        direction = entry['topic'].direction or 'Не указано'
+        dept_map.setdefault(dept, {}).setdefault(direction, []).append(entry)
+    
+    # Сортируем кафедры
+    sorted_depts = sorted(dept_map.keys(), key=lambda d: DEPARTMENTS.index(d) if d in DEPARTMENTS else d)
+    for dept in sorted_depts:
+        dept_data = dept_map[dept]
+        # Сортируем направления
+        for direction in sorted(dept_data.keys()):
+            topic_groups.append({
+                'department': dept,
+                'direction': direction,
+                'entries': dept_data[direction]
+            })
+    
+    grouped_view = True  # Всегда используем группировку
 
     context = {
-        'topic_entries': topic_entries if not grouped_view else [],
         'topic_groups': topic_groups,
         'grouped_view': grouped_view,
         'departments': departments,
@@ -595,15 +656,21 @@ def _handle_topic_decision(teacher, request_id, decision, comment, request):
 def _handle_topic_update(request, teacher):
     topic_id = request.POST.get('topic_id')
     if not topic_id:
-        messages.error(request, "Не указана тема для обновления.")
-        return False
+        error_msg = "Не указана тема для обновления."
+        if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            messages.error(request, error_msg)
+        return False, [error_msg]
+    
     topic = Topic.objects.filter(id=topic_id, teacher=teacher).first()
     if not topic:
-        messages.error(request, "Тема не найдена.")
-        return False
+        error_msg = "Тема не найдена."
+        if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            messages.error(request, error_msg)
+        return False, [error_msg]
 
     title = request.POST.get('title', '').strip()
     description = request.POST.get('description', '').strip()
+    direction = request.POST.get('direction', '').strip()
     course = request.POST.get('course')
     capacity = request.POST.get('capacity')
 
@@ -625,17 +692,20 @@ def _handle_topic_update(request, teacher):
         errors.append("Количество студентов должно быть положительным числом.")
 
     if errors:
-        for err in errors:
-            messages.error(request, err)
-        return False
+        if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            for err in errors:
+                messages.error(request, err)
+        return False, errors
 
     topic.title = title
     topic.description = description
+    topic.direction = direction
     topic.course = course_int
     topic.capacity = capacity_int
-    topic.save(update_fields=['title', 'description', 'course', 'capacity', 'updated_at'])
-    messages.success(request, "Данные темы обновлены.")
-    return True
+    topic.save(update_fields=['title', 'description', 'direction', 'course', 'capacity', 'updated_at'])
+    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        messages.success(request, "Данные темы обновлены.")
+    return True, []
 
 
 def _approve_topic_request(topic_request, comment, request):

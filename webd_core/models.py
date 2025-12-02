@@ -160,6 +160,7 @@ class Topic(models.Model):
     title = models.CharField("Название темы", max_length=255)
     description = models.TextField("Описание", blank=True)
     department = models.CharField("Кафедра", max_length=100, choices=DEPARTMENT_CHOICES)
+    direction = models.CharField("Направление", max_length=100, blank=True)
     course = models.PositiveSmallIntegerField("Курс", choices=COURSE_CHOICES, default=1)
     capacity = models.PositiveSmallIntegerField("Количество студентов", default=1)
     is_active = models.BooleanField("Активна", default=True)

@@ -1,5 +1,6 @@
 {% extends "webd_core/layout.html" %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Предложить тему{% endblock %}
 
@@ -9,7 +10,7 @@
 
     <div class="topic-create-block">
         <h2>Добавить темы</h2>
-        <form method="post" class="topic-form" id="new-topics-form">
+        <form method="post" class="topic-form" id="new-topics-form" action="{% url 'teacher_topics' %}">
             {% csrf_token %}
             <input type="hidden" name="action" value="create_batch"/>
             <table class="topics-table topics-table--new" id="new-topics-table">
@@ -17,6 +18,7 @@
                     <tr>
                         <th>Тема работы</th>
                         <th>Описание</th>
+                        <th>Направление</th>
                         <th>Курс</th>
                         <th>Количество студентов</th>
                     </tr>
@@ -25,6 +27,7 @@
                     <tr class="new-topic-row">
                         <td><input type="text" name="title[]" class="table-input" required/></td>
                         <td><textarea name="description[]" class="table-textarea"></textarea></td>
+                        <td><input type="text" name="direction[]" class="table-input"/></td>
                         <td>
                             <select name="course[]" class="table-select">
                                 {% for value,label in course_choices %}
@@ -45,35 +48,223 @@
 
     <h3>Мои темы</h3>
     <style>
+        /* Обеспечиваем одинаковую ширину таблиц */
+        .topics-table {
+            width: 100%;
+            table-layout: fixed;
+        }
+        
+        .topics-table th:nth-child(1) { width: 4%; }  /* № */
+        .topics-table th:nth-child(2) { width: 18%; } /* Тема работы */
+        .topics-table th:nth-child(3) { width: 20%; }  /* Описание */
+        .topics-table th:nth-child(4) { width: 10%; }  /* Направление */
+        .topics-table th:nth-child(5) { width: 6%; }  /* Курс */
+        .topics-table th:nth-child(6) { width: 10%; } /* Количество студентов */
+        .topics-table th:nth-child(7) { width: 20%; } /* Студенты */
+        .topics-table th:nth-child(8) { width: 12%; } /* Действия */
+        
+        .topics-table--new {
+            width: 100%;
+            table-layout: fixed;
+        }
+        
+        .topics-table--new th:nth-child(1) { width: 20%; } /* Тема работы */
+        .topics-table--new th:nth-child(2) { width: 30%; } /* Описание */
+        .topics-table--new th:nth-child(3) { width: 15%; } /* Направление */
+        .topics-table--new th:nth-child(4) { width: 15%; } /* Курс */
+        .topics-table--new th:nth-child(5) { width: 20%; } /* Количество студентов */
+        
+        /* Стили для режима просмотра и редактирования */
         .topic-row .topic-field--edit { display: none; }
         .topic-row .topic-field--view { display: block; }
+        .topic-row.is-editing .topic-field--edit { display: block; }
+        .topic-row.is-editing .topic-field--view { display: none; }
+        
+        /* Поля ввода в одну линию с красивым оформлением */
+        .topic-field--edit {
+            width: 100%;
+            display: flex;
+            align-items: center;
+        }
+        
+        .topic-field--edit .table-input,
+        .topic-field--edit .table-textarea,
+        .topic-field--edit .table-select {
+            width: 100%;
+            padding: 6px 12px;
+            font-size: 12pt;
+            font-family: serif;
+            line-height: 1.5;
+            color: black;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            box-sizing: border-box;
+        }
+        
+        .topic-field--edit .table-textarea {
+            display: block;
+        }
+        
+        .topic-field--edit .table-input:focus,
+        .topic-field--edit .table-textarea:focus,
+        .topic-field--edit .table-select:focus {
+            color: black;
+            background-color: #fff;
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        
+        /* Поле описания больше по размеру */
+        .topic-field--edit .table-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        /* Стили для полей в таблице создания новых тем */
+        .topics-table--new .table-input,
+        .topics-table--new .table-textarea,
+        .topics-table--new .table-select {
+            width: 100%;
+            padding: 6px 12px;
+            font-size: 12pt;
+            font-family: serif;
+            line-height: 1.5;
+            color: black;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            box-sizing: border-box;
+        }
+        
+        .topics-table--new .table-input:focus,
+        .topics-table--new .table-textarea:focus,
+        .topics-table--new .table-select:focus {
+            color: black;
+            background-color: #fff;
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .topics-table--new .table-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        /* Кнопки редактирования и удаления */
         .topic-row .topic-edit-toggle {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 14px;
-            padding: 2px 4px;
+            font-size: 18px;
+            padding: 4px 8px;
+            color: #0d6efd;
+            transition: color 0.15s ease-in-out;
         }
-        .topic-row.is-editing .topic-field--edit { display: block; }
-        .topic-row.is-editing .topic-field--view { display: none; }
-        .topic-row .actions-cell .save-button { display: none; }
-        .topic-row.is-editing .actions-cell .save-button { display: inline-block; }
+        
+        .topic-row .topic-edit-toggle:hover {
+            color: #0a58ca;
+        }
+        
+        .topic-row .actions-cell .save-button { 
+            display: none; 
+            padding: 4px 12px;
+            font-size: 14px;
+        }
+        
+        .topic-row.is-editing .actions-cell .save-button { 
+            display: inline-block; 
+        }
+        
         .topic-delete-btn {
             background: none;
             border: none;
             cursor: pointer;
-            color: #c00;
-            font-size: 14px;
+            color: #dc3545;
+            font-size: 18px;
+            padding: 4px 8px;
             margin-left: 6px;
+            transition: color 0.15s ease-in-out;
+        }
+        
+        .topic-delete-btn:hover {
+            color: #bb2d3b;
+        }
+        
+        /* Ячейки таблицы */
+        .topics-table td {
+            vertical-align: middle;
+            word-wrap: break-word;
+        }
+        
+        .topics-table--new td {
+            vertical-align: middle;
+        }
+        
+        /* Улучшенные стили для кнопок */
+        .topic-form__actions .inp,
+        .save-button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 12pt;
+            font-family: serif;
+            font-weight: normal;
+            line-height: 1.5;
+            text-align: center;
+            text-decoration: none;
+            vertical-align: middle;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        .topic-form__actions .inp[type="submit"],
+        .save-button {
+            color: #fff;
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+        
+        .topic-form__actions .inp[type="submit"]:hover,
+        .save-button:hover {
+            color: #fff;
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+        
+        .topic-form__actions .inp[type="button"] {
+            color: #fff;
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        
+        .topic-form__actions .inp[type="button"]:hover {
+            color: #fff;
+            background-color: #5c636a;
+            border-color: #565e64;
+        }
+        
+        .topic-form__actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
         }
     </style>
     <div class="topics-table-wrapper">
+        {% if free_topics %}
+        <h4>Свободные темы</h4>
         <table class="topics-table">
             <thead>
                 <tr>
                     <th>№</th>
                     <th>Тема работы</th>
                     <th>Описание</th>
+                    <th>Направление</th>
                     <th>Курс</th>
                     <th>Количество студентов</th>
                     <th>Студенты</th>
@@ -81,125 +272,39 @@
                 </tr>
             </thead>
             <tbody>
-            {% for row in topic_rows %}
-                <tr class="topic-row {% if not row.topic.is_active %}topic-row_inactive{% endif %}" data-topic="{{ row.topic.id }}">
-                    <td>{{ row.index }}</td>
-                    <td>
-                        <div class="topic-field--view">
-                            {{ row.topic.title }}
-                        </div>
-                        <div class="topic-field--edit">
-                            <input form="topic-form-{{ row.topic.id }}" type="text" name="title"
-                                   class="table-input" value="{{ row.topic.title }}" required/>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="topic-field--view">
-                            {{ row.topic.description|default:"Описание не задано" }}
-                            
-                        </div>
-                        <div class="topic-field--edit">
-                            <textarea form="topic-form-{{ row.topic.id }}" name="description"
-                                      class="table-textarea">{{ row.topic.description }}</textarea>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="topic-field--view">
-                            {{ row.topic.course }}
-                            
-                        </div>
-                        <div class="topic-field--edit">
-                            <input form="topic-form-{{ row.topic.id }}" type="number" min="1" max="6"
-                                   name="course" class="table-input table-input__number"
-                                   value="{{ row.topic.course }}" required/>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="capacity-box">
-                            <div class="topic-field--view">
-                                {{ row.topic.capacity }}
-                            </div>
-                            <div class="topic-field--edit">
-                                <input form="topic-form-{{ row.topic.id }}" type="number" min="1"
-                                       name="capacity" class="table-input table-input__number"
-                                       value="{{ row.topic.capacity }}" required/>
-                            </div>
-                            <div class="capacity-meta">
-                                Свободно: {{ row.free_slots }}
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="topic-students">
-                            {% if row.approved %}
-                                <div class="students-list students-list--approved">
-                                    {% for req in row.approved %}
-                                        <div class="student-pill student-pill--approved">
-                                            {{ req.enrollment.student.full_name }}
-                                            {% if req.enrollment.group %}
-                                                ({{ req.enrollment.group.name }})
-                                            {% endif %}
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            {% if row.pending %}
-                                <div class="students-list students-list--pending">
-                                    {% for req in row.pending %}
-                                        <div class="student-pending-entry">
-                                            <div class="student-pill">
-                                                {{ req.enrollment.student.full_name }}
-                                                {% if req.enrollment.group %}
-                                                    ({{ req.enrollment.group.name }})
-                                                {% endif %}
-                                            </div>
-                                            <form method="post" class="decision-inline-form">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="action" value="decision"/>
-                                                <input type="hidden" name="request_id" value="{{ req.id }}"/>
-                                                <input type="text" name="comment" placeholder="Комментарий"
-                                                       class="decision-comment"/>
-                                                <div class="decision-inline-buttons">
-                                                    <button type="submit" name="decision" value="approve"
-                                                            class="decision-btn decision-btn--approve" title="Принять">&#10003;</button>
-                                                    <button type="submit" name="decision" value="reject"
-                                                            class="decision-btn decision-btn--reject" title="Отклонить">&#10005;</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            {% if not row.approved and not row.pending %}
-                                <span class="muted">В ожидании студента(ов)</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td class="actions-cell">
-                        <button type="button" class="topic-edit-toggle" data-topic="{{ row.topic.id }}" title="Редактировать">
-                            &#9998;
-                        </button>
-                        <form method="post" style="display:inline;">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="delete_topic"/>
-                            <input type="hidden" name="topic_id" value="{{ row.topic.id }}"/>
-                            <button type="submit" class="topic-delete-btn" title="Удалить">&#10005;</button>
-                        </form>
-                        <form id="topic-form-{{ row.topic.id }}" method="post" class="hidden-form">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="update_topic"/>
-                            <input type="hidden" name="topic_id" value="{{ row.topic.id }}"/>
-                        </form>
-                        <button type="submit" form="topic-form-{{ row.topic.id }}" class="inp save-button">Сохранить</button>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="7">Пока нет тем. Добавьте первую тему с помощью формы выше.</td>
-                </tr>
+            {% for row in free_topics %}
+                {% include "webd_core/topic_row_fragment.html" with row=row %}
             {% endfor %}
             </tbody>
         </table>
+        {% endif %}
+        
+        {% for course in sorted_courses %}
+        <h4>{{ course }} курс</h4>
+        <table class="topics-table">
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Тема работы</th>
+                    <th>Описание</th>
+                    <th>Направление</th>
+                    <th>Курс</th>
+                    <th>Количество студентов</th>
+                    <th>Студенты</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in course_topics|get_item:course %}
+                {% include "webd_core/topic_row_fragment.html" with row=row %}
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endfor %}
+        
+        {% if not free_topics and not course_topics %}
+        <p>Пока нет тем. Добавьте первую тему с помощью формы выше.</p>
+        {% endif %}
     </div>
 </div>
 <script>
@@ -217,13 +322,267 @@
         table.appendChild(clone);
     });
 })();
- (function() {
+
+(function() {
     document.querySelectorAll('.topic-edit-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
             const row = btn.closest('.topic-row');
             if (row) {
                 row.classList.toggle('is-editing');
             }
+        });
+    });
+})();
+
+// AJAX для сохранения новых тем
+(function() {
+    const form = document.getElementById('new-topics-form');
+    if (!form) return;
+    
+    const table = document.getElementById('new-topics-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Сохранение...';
+        
+        // Получаем правильный URL
+        let url = form.getAttribute('action');
+        if (!url || url === '') {
+            url = window.location.pathname;
+        }
+        // Убеждаемся, что это строка
+        url = String(url);
+        
+        fetch(url, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        const error = new Error(data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+                        error.response = { json: () => Promise.resolve(data) };
+                        throw error;
+                    }
+                    return data;
+                });
+            } else {
+                return response.text().then(html => {
+                    const error = new Error('Сервер вернул не JSON ответ. Возможно, произошла ошибка на сервере.');
+                    console.error('HTML ответ:', html.substring(0, 500));
+                    throw error;
+                });
+            }
+        })
+        .then(data => {
+            if (data.success) {
+                // Очищаем форму
+                form.reset();
+                // Удаляем все строки кроме первой
+                if (tbody) {
+                    const rows = tbody.querySelectorAll('.new-topic-row');
+                    for (let i = 1; i < rows.length; i++) {
+                        rows[i].remove();
+                    }
+                }
+                // Обновляем страницу для отображения новых тем
+                window.location.reload();
+            } else {
+                alert('Ошибки: ' + (data.errors || []).join(', '));
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении:', error);
+            let errorMessage = 'Ошибка при сохранении: ' + error.message;
+            if (error.response) {
+                error.response.json().then(data => {
+                    if (data.errors) {
+                        errorMessage = 'Ошибки: ' + data.errors.join(', ');
+                    }
+                    alert(errorMessage);
+                }).catch(() => {
+                    alert(errorMessage);
+                });
+            } else {
+                alert(errorMessage);
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
+    });
+})();
+
+// AJAX для сохранения редактируемых тем
+(function() {
+    document.querySelectorAll('form[id^="topic-form-"]').forEach(form => {
+        const submitBtn = document.querySelector(`button[form="${form.id}"]`);
+        if (!submitBtn) return;
+        
+        submitBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const row = form.closest('.topic-row');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Сохранение...';
+            
+            // Получаем правильный URL
+            let url = form.getAttribute('action');
+            if (!url || url === '') {
+                url = window.location.pathname;
+            }
+            // Убеждаемся, что это строка
+            url = String(url);
+            
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                // Проверяем тип контента
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (!response.ok) {
+                            const error = new Error(data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+                            error.response = { json: () => Promise.resolve(data) };
+                            throw error;
+                        }
+                        return data;
+                    });
+                } else {
+                    // Если ответ не JSON, возможно это HTML страница с ошибкой
+                    return response.text().then(html => {
+                        const error = new Error('Сервер вернул не JSON ответ. Возможно, произошла ошибка на сервере.');
+                        console.error('HTML ответ:', html.substring(0, 500));
+                        throw error;
+                    });
+                }
+            })
+            .then(data => {
+                if (!data || !data.success) {
+                    throw new Error(data && data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+                }
+                // Обновляем значения в режиме просмотра ПЕРЕД выходом из режима редактирования
+                if (row) {
+                    const titleInput = row.querySelector('input[name="title"]');
+                    const descriptionTextarea = row.querySelector('textarea[name="description"]');
+                    const directionInput = row.querySelector('input[name="direction"]');
+                    const courseInput = row.querySelector('input[name="course"]');
+                    const capacityInput = row.querySelector('input[name="capacity"]');
+                    
+                    // Обновляем значения в режиме просмотра
+                    if (titleInput) {
+                        const viewTitle = row.querySelector('td:nth-child(2) .topic-field--view');
+                        if (viewTitle) {
+                            viewTitle.textContent = titleInput.value.trim() || titleInput.value;
+                        }
+                    }
+                    if (descriptionTextarea) {
+                        const viewDesc = row.querySelector('td:nth-child(3) .topic-field--view');
+                        if (viewDesc) {
+                            const descValue = descriptionTextarea.value.trim();
+                            viewDesc.textContent = descValue || 'Описание не задано';
+                        }
+                    }
+                    if (directionInput) {
+                        const viewDir = row.querySelector('td:nth-child(4) .topic-field--view');
+                        if (viewDir) {
+                            const dirValue = directionInput.value.trim();
+                            viewDir.textContent = dirValue || '—';
+                        }
+                    }
+                    if (courseInput) {
+                        const viewCourse = row.querySelector('td:nth-child(5) .topic-field--view');
+                        if (viewCourse) {
+                            viewCourse.textContent = courseInput.value;
+                        }
+                    }
+                    // Проверяем, изменился ли capacity
+                    let capacityChanged = false;
+                    let oldFreeSlots = 0;
+                    let newFreeSlots = 0;
+                    
+                    if (capacityInput) {
+                        const viewCapacity = row.querySelector('td:nth-child(6) .capacity-box .topic-field--view');
+                        const oldCapacity = parseInt(viewCapacity ? viewCapacity.textContent.trim() : '0') || 0;
+                        const newCapacity = parseInt(capacityInput.value) || 0;
+                        
+                        if (oldCapacity !== newCapacity) {
+                            capacityChanged = true;
+                        }
+                        
+                        if (viewCapacity) {
+                            viewCapacity.textContent = capacityInput.value;
+                        }
+                        
+                        // Обновляем поле "Свободно" и вычисляем новые свободные места
+                        const capacityMeta = row.querySelector('td:nth-child(6) .capacity-box .capacity-meta');
+                        if (capacityMeta) {
+                            // Получаем старое значение свободных мест
+                            const oldMetaText = capacityMeta.textContent.trim();
+                            const oldMatch = oldMetaText.match(/Свободно:\s*(\d+)/);
+                            oldFreeSlots = oldMatch ? parseInt(oldMatch[1]) : 0;
+                            
+                            // Подсчитываем количество одобренных студентов
+                            const approvedCount = row.querySelectorAll('.student-pill--approved').length;
+                            newFreeSlots = Math.max(newCapacity - approvedCount, 0);
+                            capacityMeta.textContent = 'Свободно: ' + newFreeSlots;
+                        }
+                    }
+                    
+                    // Если изменился capacity и статус свободности изменился (было 0 стало >0 или наоборот),
+                    // перезагружаем страницу для перемещения темы в правильную группу
+                    if (capacityChanged && ((oldFreeSlots === 0 && newFreeSlots > 0) || (oldFreeSlots > 0 && newFreeSlots === 0))) {
+                        // Перезагружаем страницу для обновления группировки
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    // Выходим из режима редактирования ПОСЛЕ обновления значений
+                    row.classList.remove('is-editing');
+                }
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            })
+            .catch(error => {
+                console.error('Ошибка при сохранении:', error);
+                let errorMessage = 'Ошибка при сохранении: ' + error.message;
+                if (error.response) {
+                    // Если есть ответ от сервера, попробуем получить детали
+                    error.response.json().then(data => {
+                        if (data.errors) {
+                            errorMessage = 'Ошибки: ' + data.errors.join(', ');
+                        }
+                        alert(errorMessage);
+                    }).catch(() => {
+                        alert(errorMessage);
+                    });
+                } else {
+                    alert(errorMessage);
+                }
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            });
         });
     });
 })();

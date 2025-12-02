@@ -20,8 +20,8 @@ class YearAdmin(admin.ModelAdmin):
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "year", "is_latest")
-    list_filter  = ("year", "is_latest")
+    list_display = ("id", "name", "year")
+    list_filter  = ("year",)
     search_fields= ("name",)
 
 @admin.register(Student)
@@ -39,23 +39,26 @@ class DocumentAdmin(admin.ModelAdmin):
     list_filter    = ("doc_type",)
     search_fields  = ("enrollment__student__login",)
 
-
 @admin.register(TeacherProfile)
 class TeacherProfileAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "department", "adviser_position", "user")
-    search_fields = ("full_name", "user__username")
+    list_display = ("id", "full_name", "department", "adviser_position", "user", "created_at")
     list_filter = ("department", "adviser_position")
-
+    search_fields = ("full_name", "user__username")
+    raw_id_fields = ("user",)
+    ordering = ("full_name",)
 
 @admin.register(Topic)
 class TopicAdmin(admin.ModelAdmin):
-    list_display = ("title", "teacher", "department", "course", "capacity", "is_active", "created_at")
-    list_filter = ("department", "course", "is_active")
-    search_fields = ("title", "teacher__full_name")
-
+    list_display = ("id", "title", "teacher", "department", "direction", "course", "capacity", "is_active", "created_at")
+    list_filter = ("department", "course", "is_active", "created_at")
+    search_fields = ("title", "teacher__full_name", "description")
+    raw_id_fields = ("teacher",)
+    ordering = ("-created_at",)
 
 @admin.register(TopicRequest)
 class TopicRequestAdmin(admin.ModelAdmin):
-    list_display = ("topic", "enrollment", "status", "created_at", "decided_at")
-    list_filter = ("status", "topic__department")
-    search_fields = ("topic__title", "enrollment__student__full_name")
+    list_display = ("id", "topic", "enrollment", "status", "created_at", "decided_at")
+    list_filter = ("status", "created_at", "decided_at")
+    search_fields = ("topic__title", "enrollment__student__full_name", "enrollment__student__login")
+    raw_id_fields = ("topic", "enrollment",)
+    ordering = ("-created_at",)

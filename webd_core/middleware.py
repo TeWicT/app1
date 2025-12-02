@@ -1,5 +1,5 @@
 # webd_core/middleware.py
-from .models import Student, TeacherProfile, TopicRequest
+from .models import Student, TeacherProfile, TopicRequest, Year
 
 
 class FoundYearMiddleware:
@@ -7,10 +7,11 @@ class FoundYearMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        default_year = self._get_default_year()
         if 'foundyear' not in request.session:
-            request.session['foundyear'] = 2024
+            request.session['foundyear'] = default_year
 
-        request.foundyear = request.session['foundyear']
+        request.foundyear = request.session.get('foundyear', default_year)
         request.student_profile = None
         request.teacher_profile = None
 
@@ -43,3 +44,8 @@ class FoundYearMiddleware:
 
         response = self.get_response(request)
         return response
+
+    @staticmethod
+    def _get_default_year():
+        latest_year = Year.objects.order_by('-year').values_list('year', flat=True).first()
+        return latest_year if latest_year else 2024
