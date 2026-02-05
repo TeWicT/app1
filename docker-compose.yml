@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: app1_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: app1
+      POSTGRES_USER: app1user
+      POSTGRES_PASSWORD: app1pass
+    volumes:
+      - app1_pg_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: app1_web
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    expose:
+      - "8000"
+    volumes:
+      - app1_static:/app/staticfiles
+      - app1_media:/app/media
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: app1_nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - app1_static:/app/staticfiles:ro
+      - app1_media:/app/media:ro
+
+volumes:
+  app1_pg_data:
+  app1_static:
+  app1_media:
+

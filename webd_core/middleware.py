@@ -1,4 +1,5 @@
 # webd_core/middleware.py
+from django.db import connection
 from .models import Student, TeacherProfile, TopicRequest, Year
 
 
@@ -47,5 +48,16 @@ class FoundYearMiddleware:
 
     @staticmethod
     def _get_default_year():
+        """
+        Возвращает текущий учебный год по данным из БД.
+
+        На «чистой» базе таблица Year может ещё не существовать (до применения миграций),
+        поэтому сначала проверяем наличие таблицы. Если её нет — возвращаем дефолтное
+        значение (2024), чтобы не падать с OperationalError.
+        """
+        tables = connection.introspection.table_names()
+        if "webd_core_year" not in tables:
+            return 2026
+
         latest_year = Year.objects.order_by('-year').values_list('year', flat=True).first()
-        return latest_year if latest_year else 2024
+        return latest_year if latest_year else 2026
