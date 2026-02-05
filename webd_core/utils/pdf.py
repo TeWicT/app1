@@ -1,15 +1,17 @@
-import pdfkit
-from django.conf import settings
-
 def html_to_pdf(html: str) -> bytes:
     """
-    Конвертирует HTML (UTF-8) в PDF через wkhtmltopdf.
+    Конвертирует HTML (UTF-8) в PDF через WeasyPrint.
     Возвращает сырые байты PDF.
     """
-    config = pdfkit.configuration(wkhtmltopdf=settings.WKHTMLTOPDF_CMD)
-    options = {
-        'encoding': "UTF-8",
-        'enable-local-file-access': None,  # чтобы видеть локальные статики
-        # доп. опции: 'margin-top': '10mm', ...
-    }
-    return pdfkit.from_string(html, False, configuration=config, options=options)
+    # Ленивая загрузка, чтобы на Windows без системных библиотек WeasyPrint
+    # не падал при импорте модуля целиком.
+    try:
+        from weasyprint import HTML  # type: ignore
+    except Exception as exc:  # ImportError, OSError и т.п.
+        raise RuntimeError(
+            "WeasyPrint не может быть загружен. "
+            "Для генерации PDF используйте Docker-окружение, "
+            "где все зависимости установлены."
+        ) from exc
+
+    return HTML(string=html).write_pdf()

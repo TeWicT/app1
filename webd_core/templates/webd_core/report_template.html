@@ -4,11 +4,16 @@
 <head>
   <meta charset="utf-8">
   <style>
+    @page {
+      size: A4 landscape;
+      margin: 15mm;
+    }
+
     .page-break { page-break-after: always; }
     body {
       font-family: "DejaVuSans", sans-serif;
-      font-size: 12px;
-      margin: 20px;
+      font-size: 11px;
+      margin: 0;
     }
     h2, h3, h4 {
       margin: 10px 0 4px;
@@ -18,11 +23,14 @@
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 16px;
+      table-layout: fixed;
     }
     th, td {
       border: 1px solid #333;
-      padding: 4px 6px;
+      padding: 3px 4px;
       vertical-align: middle;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     th {
       background: #eee;

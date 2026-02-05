@@ -8,6 +8,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    libcairo2 \
+    pango1.0-tools \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/
