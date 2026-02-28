@@ -22,7 +22,7 @@ services:
       - "8000"
     volumes:
       - app1_static:/app/staticfiles
-      - app1_media:/app/media
+      - ./media:/app/media  
 
   nginx:
     image: nginx:1.27-alpine
@@ -35,10 +35,10 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - app1_static:/app/staticfiles:ro
-      - app1_media:/app/media:ro
+      - ./media:/app/media:ro 
 
 volumes:
   app1_pg_data:
   app1_static:
-  app1_media:
+
 

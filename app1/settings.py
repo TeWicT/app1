@@ -40,6 +40,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'webd_core',  # our migrated app
 ]
+
+# Используем стандартную Django-аутентификацию + наш LDAP backend
+AUTHENTICATION_BACKENDS = [
+    'webd_core.auth_backends.LdapBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -140,6 +146,14 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Настройки LDAP (для auth backend)
+LDAP_SERVER = os.getenv('LDAP_SERVER', 'ldaps://ldap.cs.prv')
+LDAP_PORT = int(os.getenv('LDAP_PORT', '636'))
+LDAP_USE_SSL = os.getenv('LDAP_USE_SSL', 'True') == 'True'
+# База поиска пользователей — по вашему выводу DN видно, что пользователи лежат под dc=cs,dc=karelia,dc=ru
+LDAP_BASE_DN = os.getenv('LDAP_BASE_DN', 'dc=cs,dc=karelia,dc=ru')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
