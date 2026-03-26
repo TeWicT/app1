@@ -31,12 +31,18 @@ class Command(BaseCommand):
             action='store_true',
             help='Пометить группы как выпускные (is_latest=True)',
         )
+        parser.add_argument(
+            '--master-latest',
+            action='store_true',
+            help='Пометить группы как магистратура выпускного года (is_master_latest=True)',
+        )
 
     def handle(self, *args, **options):
         year_val = options['year']
         courses = options['courses']
         groups_per_course = options['groups_per_course']
         is_latest = options['latest']
+        is_master_latest = options['master_latest']
 
         # Проверяем или создаём год
         try:
@@ -64,7 +70,10 @@ class Command(BaseCommand):
                     group, created = Group.objects.get_or_create(
                         year=year_obj,
                         name=group_name,
-                        defaults={'is_latest': is_latest}
+                        defaults={
+                            'is_latest': is_latest,
+                            'is_master_latest': is_master_latest,
+                        }
                     )
                     
                     if created:
@@ -75,8 +84,12 @@ class Command(BaseCommand):
                         # Обновляем is_latest, если указан флаг
                         if is_latest and not group.is_latest:
                             group.is_latest = True
-                            group.save()
+                            group.save(update_fields=['is_latest'])
                             self.stdout.write(f"  Обновлена группа: {group_name} (помечена как выпускная)")
+                        if is_master_latest and not group.is_master_latest:
+                            group.is_master_latest = True
+                            group.save(update_fields=['is_master_latest'])
+                            self.stdout.write(f"  Обновлена группа: {group_name} (помечена как магистратура выпускного года)")
 
         # Итоговая статистика
         self.stdout.write("\n" + "="*50)
@@ -87,6 +100,8 @@ class Command(BaseCommand):
         self.stdout.write(f"Всего групп в году: {Group.objects.filter(year=year_obj).count()}")
         if is_latest:
             self.stdout.write(self.style.WARNING("Все группы помечены как выпускные"))
+        if is_master_latest:
+            self.stdout.write(self.style.WARNING("Все группы помечены как магистратура выпускного года"))
         self.stdout.write("="*50)
 
 

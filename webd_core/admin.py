@@ -20,8 +20,8 @@ class YearAdmin(admin.ModelAdmin):
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "year")
-    list_filter  = ("year",)
+    list_display = ("id", "name", "year", "is_latest", "is_master_latest")
+    list_filter  = ("year", "is_latest", "is_master_latest")
     search_fields= ("name",)
 
 @admin.register(Student)

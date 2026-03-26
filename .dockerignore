@@ -1,0 +1,29 @@
+# VCS and IDE
+.git
+.idea
+.vscode
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Local environments
+venv/
+.venv/
+env/
+
+# Local/runtime data that should not be baked into image
+db.sqlite3
+media/
+staticfiles/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/

@@ -122,11 +122,16 @@ def _attach_indexes(rows):
 
 def _collect_grouped_rows(qs):
     grouped = defaultdict(lambda: defaultdict(dict))
-    flat_rows = {False: [], True: []}
+    flat_rows = {
+        'regular': [],
+        'latest': [],
+        'master_latest': [],
+    }
 
     for enroll in qs:
         is_latest = enroll.group.is_latest
-        doc_types = Document.get_doc_types_for_group(is_latest)
+        is_master_latest = enroll.group.is_master_latest
+        doc_types = Document.get_doc_types_for_group(is_latest, is_master_latest)
         row = _build_row(enroll, doc_types)
 
         year_entry = grouped[enroll.year.year]
@@ -135,9 +140,15 @@ def _collect_grouped_rows(qs):
             'rows': [],
             'doc_types': doc_types,
             'is_latest': is_latest,
+            'is_master_latest': is_master_latest,
         })
         group_entry['rows'].append(row)
-        flat_rows[is_latest].append(row)
+        if is_master_latest:
+            flat_rows['master_latest'].append(row)
+        elif is_latest:
+            flat_rows['latest'].append(row)
+        else:
+            flat_rows['regular'].append(row)
 
     return grouped, flat_rows
 
@@ -164,6 +175,7 @@ def _build_group_panels(grouped):
                     'rows': rows,
                     'files': [{'code': code, 'name': label} for code, label in group_data['doc_types']],
                     'is_latest': group_data['is_latest'],
+                    'is_master_latest': group_data['is_master_latest'],
                 })
     return panels
 
@@ -171,19 +183,26 @@ def _build_group_panels(grouped):
 def _build_flat_sections(flat_rows):
     sections = []
     titles = {
-        False: 'Группы, продолжающие обучение',
-        True: 'Группы выпускного года',
+        'regular': 'Группы, продолжающие обучение',
+        'latest': 'Группы выпускного года',
+        'master_latest': 'Группы магистратуры выпускного года',
     }
 
-    for is_latest in (False, True):
-        rows = flat_rows[is_latest]
+    section_specs = [
+        ('regular', False, False),
+        ('latest', True, False),
+        ('master_latest', True, True),
+    ]
+    for key, is_latest, is_master_latest in section_specs:
+        rows = flat_rows[key]
         if not rows:
             continue
         sections.append({
-            'caption': titles[is_latest],
-            'files': [{'code': code, 'name': label} for code, label in Document.get_doc_types_for_group(is_latest)],
+            'caption': titles[key],
+            'files': [{'code': code, 'name': label} for code, label in Document.get_doc_types_for_group(is_latest, is_master_latest)],
             'students': _attach_indexes(rows),
             'is_latest': is_latest,
+            'is_master_latest': is_master_latest,
         })
     return sections
 
@@ -331,7 +350,10 @@ def upload_view(request,foundyear):
         messages.error(request, "Не удалось найти запись обучения для выбранного года.")
         return redirect('page_webd')
     results = {}
-    doc_types = Document.get_doc_types_for_group(enrollment.group.is_latest)
+    doc_types = Document.get_doc_types_for_group(
+        enrollment.group.is_latest,
+        enrollment.group.is_master_latest,
+    )
     
     if request.method == "POST":
         doc_type = request.POST.get("for-doc")

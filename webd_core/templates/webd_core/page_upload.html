@@ -21,9 +21,9 @@
         <div>
             <div class="user_file_label">
                 {% if f %}
-                    <a target="_blank" href="{{ f.file.url }}">{{ label }}</a>
+                    <a target="_blank" href="{{ f.file.url }}">{{ label|safe }}</a>
                 {% else %}
-                    {{ label }}
+                    {{ label|safe }}
                 {% endif %}
             </div>
 

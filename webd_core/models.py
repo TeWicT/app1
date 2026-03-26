@@ -32,6 +32,7 @@ class Group(models.Model):
     year = models.ForeignKey(Year, on_delete=models.CASCADE,
                              related_name='groups', verbose_name="Год обучения")
     is_latest = models.BooleanField(default=False, verbose_name="Выпускной год")
+    is_master_latest = models.BooleanField(default=False, verbose_name="Магистратура Выпускной Год")
 
     class Meta:
         unique_together = ('name', 'year')
@@ -98,6 +99,7 @@ class Document(models.Model):
     THESIS_PRESENTATION  = 'thesis_presentation'
     PLAGIARISM_CHECK     = 'plagiarism_check'
     ADVISOR_REVIEW       = 'advisor_review'
+    REVIEW               = 'review'
 
     _INTERIM_DOCS = [
         (INTERIM_REPORT,       'Пр. отчет'),
@@ -108,16 +110,20 @@ class Document(models.Model):
         (FINAL_PRESENTATION,   'ЭП'),
     ]
     _LATEST_EXTRA_DOCS = [
-        (PRACTICE_NIR_REPORT,  'Отчет по практике НИР'),
-        (THESIS_TEXT,          'Текст ВКР'),
-        (THESIS_PRESENTATION,  'Презентация ВКР'),
-        (PLAGIARISM_CHECK,     'Проверка на плагиат'),
-        (ADVISOR_REVIEW,       'Отзыв руководителя'),
+        (PRACTICE_NIR_REPORT,  'Отчет по<br>практике НИР'),
+        (THESIS_TEXT,          'Текст<br>ВКР'),
+        (THESIS_PRESENTATION,  'Презент.<br>ВКР'),
+        (PLAGIARISM_CHECK,     'Проверка на<br>плагиат'),
+        (ADVISOR_REVIEW,       'Отзыв<br>руковод.'),
+    ]
+    _MASTER_LATEST_EXTRA_DOCS = _LATEST_EXTRA_DOCS + [
+        (REVIEW,               'Рецензия'),
     ]
 
     STANDARD_DOC_TYPES = _INTERIM_DOCS + _REGULAR_FINAL_DOCS
     LATEST_DOC_TYPES   = _INTERIM_DOCS + _LATEST_EXTRA_DOCS
-    DOC_TYPES = _INTERIM_DOCS + _REGULAR_FINAL_DOCS + _LATEST_EXTRA_DOCS
+    MASTER_LATEST_DOC_TYPES = _INTERIM_DOCS + _MASTER_LATEST_EXTRA_DOCS
+    DOC_TYPES = _INTERIM_DOCS + _REGULAR_FINAL_DOCS + _MASTER_LATEST_EXTRA_DOCS
 
     enrollment  = models.ForeignKey(Enrollment, on_delete=models.CASCADE,
                                     related_name='documents', verbose_name="Запись обучения")
@@ -135,7 +141,9 @@ class Document(models.Model):
         return f"{self.enrollment.student.login} – {self.get_doc_type_display()} @ {self.uploaded_at:%Y-%m-%d}"
 
     @classmethod
-    def get_doc_types_for_group(cls, is_latest: bool):
+    def get_doc_types_for_group(cls, is_latest: bool, is_master_latest: bool = False):
+        if is_master_latest:
+            return cls.MASTER_LATEST_DOC_TYPES
         return cls.LATEST_DOC_TYPES if is_latest else cls.STANDARD_DOC_TYPES
 
 
