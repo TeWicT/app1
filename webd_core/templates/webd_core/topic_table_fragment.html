@@ -62,7 +62,7 @@
                                 <div class="muted">Комментарий: {{ req.comment }}</div>
                                 {% endif %}
                             </div>
-                            {% if req.status == 'rejected' and entry.free_slots > 0 %}
+                            {% if req.status == 'rejected' and entry.free_slots > 0 and student_has_pending == False %}
                             <form method="post" style="display: inline;">
                                 {% csrf_token %}
                                 <input type="hidden" name="department" value="{{ selected_department }}"/>

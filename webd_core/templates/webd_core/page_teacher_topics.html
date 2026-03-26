@@ -27,7 +27,15 @@
                     <tr class="new-topic-row">
                         <td><input type="text" name="title[]" class="table-input" required/></td>
                         <td><textarea name="description[]" class="table-textarea"></textarea></td>
-                        <td><input type="text" name="direction[]" class="table-input"/></td>
+                        <td>
+                            <select name="direction[]" class="table-input" required>
+                                <option value="Математика">Математика</option>
+                                <option value="ПМИ">ПМИ</option>
+                                <option value="ИСИТ">ИСИТ</option>
+                                <option value="ПИ">ПИ</option>
+                                <option value="ПО">ПО</option>
+                            </select>
+                        </td>
                         <td>
                             <select name="course[]" class="table-select">
                                 {% for value,label in course_choices %}
