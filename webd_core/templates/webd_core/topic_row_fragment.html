@@ -11,7 +11,12 @@
     </td>
     <td>
         <div class="topic-field--view">
-            {{ row.topic.description|default:"Описание не задано" }}
+            <details class="topic-details">
+                <summary>Описание</summary>
+                <div class="topic-description">
+                    {{ row.topic.description|default:"Описание не задано" }}
+                </div>
+            </details>
         </div>
         <div class="topic-field--edit">
             <textarea form="topic-form-{{ row.topic.id }}" name="description"

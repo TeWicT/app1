@@ -254,6 +254,78 @@
             display: flex;
             gap: 10px;
         }
+
+        /* Анимация сворачивания/разворачивания описания тем (как у студентов на странице выбора тем) */
+        .topic-details {
+            margin: 0;
+        }
+
+        .topic-details summary {
+            cursor: pointer;
+            font-weight: 500;
+            padding: 4px 0;
+            list-style: none;
+            position: relative;
+            padding-left: 20px;
+            user-select: none;
+        }
+
+        .topic-details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .topic-details summary::before {
+            content: '▶';
+            position: absolute;
+            left: 0;
+            transition: transform 0.3s ease;
+            display: inline-block;
+        }
+
+        .topic-details[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .topic-details .topic-description {
+            overflow: hidden;
+            padding: 0 0 0 20px;
+            margin: 0;
+            height: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease-in 0.2s,
+                        padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0.6s;
+        }
+
+        .topic-details .topic-description.expanding {
+            opacity: 1 !important;
+            visibility: visible !important;
+            padding: 12px 0 12px 20px;
+            margin-top: 8px;
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease-in 0.1s,
+                        padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0s;
+        }
+
+        .topic-details .topic-description.collapsing {
+            opacity: 0;
+            visibility: hidden;
+            transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.3s ease-out,
+                        padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0.5s;
+        }
+
+        .topic-details[open] .topic-description {
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
     </style>
     <div class="topics-table-wrapper">
         {% if free_topics %}
@@ -313,12 +385,38 @@
     const addBtn = document.getElementById('add-topic-row');
     if (!table || !addBtn) return;
     addBtn.addEventListener('click', function() {
-        const lastRow = table.querySelector('.new-topic-row');
-        if (!lastRow) return;
+        const rows = table.querySelectorAll('.new-topic-row');
+        if (!rows.length) return;
+        const lastRow = rows[rows.length - 1];
         const clone = lastRow.cloneNode(true);
-        clone.querySelectorAll('input, textarea').forEach(el => {
-            el.value = el.type === 'number' ? '1' : '';
+
+        // Клонируем значения из предыдущей строки для всех полей,
+        // кроме "Тема работы" и "Описание" — они должны быть пустыми.
+        const prevInputs = lastRow.querySelectorAll('input, textarea, select');
+        const newInputs = clone.querySelectorAll('input, textarea, select');
+
+        newInputs.forEach((el, idx) => {
+            const prev = prevInputs[idx];
+            if (!prev) return;
+
+            const name = el.name || '';
+            // title[] и description[] всегда очищаем
+            if (name === 'title[]' || name === 'description[]') {
+                if (el.tagName.toLowerCase() === 'select') {
+                    el.selectedIndex = 0;
+                } else {
+                    el.value = '';
+                }
+            } else {
+                // Для остальных полей копируем значение/выбор
+                if (el.tagName.toLowerCase() === 'select') {
+                    el.value = prev.value;
+                } else {
+                    el.value = prev.value;
+                }
+            }
         });
+
         table.appendChild(clone);
     });
 })();
@@ -497,10 +595,13 @@
                         }
                     }
                     if (descriptionTextarea) {
-                        const viewDesc = row.querySelector('td:nth-child(3) .topic-field--view');
-                        if (viewDesc) {
+                        const viewDescContainer = row.querySelector('td:nth-child(3) .topic-field--view');
+                        if (viewDescContainer) {
+                            const descElem = viewDescContainer.querySelector('.topic-description');
                             const descValue = descriptionTextarea.value.trim();
-                            viewDesc.textContent = descValue || 'Описание не задано';
+                            if (descElem) {
+                                descElem.textContent = descValue || 'Описание не задано';
+                            }
                         }
                     }
                     if (directionInput) {
@@ -586,6 +687,139 @@
         });
     });
 })();
+
+// Плавная анимация разворота описания темы как свиток (аналогично странице выбора темы у студента)
+document.addEventListener('DOMContentLoaded', function() {
+    const detailsElements = document.querySelectorAll('.topic-details');
+
+    detailsElements.forEach(function(details) {
+        const summary = details.querySelector('summary');
+        const description = details.querySelector('.topic-description');
+
+        if (!summary || !description) return;
+
+        let isAnimating = false;
+
+        summary.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            if (isAnimating) {
+                return;
+            }
+
+            const isOpen = details.hasAttribute('open');
+
+            if (isOpen) {
+                isAnimating = true;
+                collapseDescription(description, function() {
+                    details.removeAttribute('open');
+                    isAnimating = false;
+                });
+            } else {
+                isAnimating = true;
+                details.setAttribute('open', '');
+                expandDescription(description, function() {
+                    isAnimating = false;
+                });
+            }
+        });
+
+        // Инициализация состояния
+        if (details.hasAttribute('open')) {
+            const targetHeight = description.scrollHeight;
+            description.style.height = targetHeight + 'px';
+            description.style.opacity = '1';
+            description.style.visibility = 'visible';
+            description.style.padding = '12px 0 12px 20px';
+            description.style.marginTop = '8px';
+            setTimeout(function() {
+                description.style.height = 'auto';
+            }, 100);
+        } else {
+            description.style.height = '0';
+            description.style.opacity = '0';
+            description.style.visibility = 'hidden';
+            description.style.padding = '0 0 0 20px';
+            description.style.marginTop = '0';
+        }
+    });
+
+    function expandDescription(element, callback) {
+        if (element._animationTimeout) {
+            clearTimeout(element._animationTimeout);
+        }
+
+        element.classList.remove('expanding', 'collapsing');
+
+        const startHeight = 0;
+
+        element.style.height = 'auto';
+        element.style.visibility = 'hidden';
+        element.style.display = 'block';
+        const targetHeight = element.scrollHeight;
+
+        element.style.visibility = 'visible';
+        element.style.display = '';
+        element.style.height = startHeight + 'px';
+        element.style.opacity = '0';
+        element.style.visibility = 'hidden';
+        element.style.padding = '0 0 0 20px';
+        element.style.marginTop = '0';
+
+        element.offsetHeight;
+
+        element.classList.add('expanding');
+
+        requestAnimationFrame(function() {
+            element.style.height = targetHeight + 'px';
+            element.style.opacity = '1';
+            element.style.visibility = 'visible';
+        });
+
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = 'auto';
+            element.classList.remove('expanding');
+            if (callback) callback();
+        }, 600);
+    }
+
+    function collapseDescription(element, callback) {
+        if (element._animationTimeout) {
+            clearTimeout(element._animationTimeout);
+        }
+
+        element.classList.remove('expanding', 'collapsing');
+
+        if (element.style.height === 'auto' || !element.style.height) {
+            element.style.height = element.scrollHeight + 'px';
+        }
+
+        const startHeight = parseFloat(element.style.height) || element.scrollHeight;
+        element.style.height = startHeight + 'px';
+
+        element.offsetHeight;
+
+        element.classList.add('collapsing');
+
+        requestAnimationFrame(function() {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+            element.style.visibility = 'hidden';
+            element.style.padding = '0 0 0 20px';
+            element.style.marginTop = '0';
+        });
+
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = '';
+            element.style.opacity = '';
+            element.style.visibility = '';
+            element.style.padding = '';
+            element.style.marginTop = '';
+            element.classList.remove('collapsing');
+            if (callback) callback();
+        }, 500);
+    }
+});
 </script>
 {% endblock %}
 
