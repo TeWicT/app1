@@ -41,11 +41,11 @@
             </label>
 			<input type="text" id="adviser_name" name="adviser_name" class="user_adviser_name inp txt_inp"
 				placeholder="И. О. Фамилия" style="width:400px" pattern="([А-Я|A-Z]\.\s?){1,2}[А-Я|A-Z][А-Я|A-Z|а-я|a-z]{0,20}(,\s?([А-Я|A-Z]\.\s?){1,2}[А-Я|A-Z][А-Я|A-Z|а-я|a-z]{0,20})*"
-                required="required" value="{{enroll.adviser_name}}"/>
+                required="required" value="{{enroll.adviser_name}}"{% if not is_editable %} readonly="readonly" disabled="disabled"{% endif %}/>
 		</div>
 		<div title="Должность, занимаемая руководителем работы. Например, 'преподаватель'.">
 			<label for="adviser_position" class="user_form_label"><span class="star">*</span>Должность руководителя:</label>
-			<select name="adviser_position" id="adviser_position" class="user_adviser_position inp txt_inp" required="required">
+			<select name="adviser_position" id="adviser_position" class="user_adviser_position inp txt_inp" required="required"{% if not is_editable %} disabled="disabled"{% endif %}>
 				<option value="" disabled="disabled" selected="selected"></option>
                 {% for p in positions %}
                 <option value="{{p.value}}" {%if p.selected %}selected="selected"{% endif %}>
@@ -58,7 +58,7 @@
 			<label for="adviser_status" class="user_form_label">Ученая степень руководителя:</label>
 			<input id="adviser_status" placeholder="к. т. н." type="text"
                    name="adviser_status" class="user_adviser_status inp txt_inp"
-				   list="status-list" autocomplete="off" value="{{enroll.adviser_status}}"
+				   list="status-list" autocomplete="off" value="{{enroll.adviser_status}}"{% if not is_editable %} readonly="readonly" disabled="disabled"{% endif %}
                    pattern="[А-Яа-яA-Za-z\.\-\s]*"/>
 			<datalist id="status-list">
 				<option value="без степени"></option>
@@ -71,7 +71,7 @@
 		</div>
 		<div title="Ученое звание руководителя работы. В россии существуют звания 'доцент' и 'профессор'.">
 			<label for="adviser_rank" class="user_form_label">Ученое звание руководителя:</label>
-			<select id="adviser_rank" name="adviser_rank" class="user_adviser_rank inp txt_inp">
+			<select id="adviser_rank" name="adviser_rank" class="user_adviser_rank inp txt_inp"{% if not is_editable %} disabled="disabled"{% endif %}>
 				<option value="" selected></option>
                 {% for r in ranks %}
                 <option value="{{r.value}}" {%if r.selected %}selected="selected"{% endif %}>
@@ -82,7 +82,7 @@
 		</div>
 		<div title="Определяется по кафедре, к которой приписан научный руководитель.">
 			<label for="department" class="user_form_label"><span class="star">*</span>Кафедра:</label>
-			<select id="department" name="department" class="user_department inp txt_inp" required="required">
+			<select id="department" name="department" class="user_department inp txt_inп" required="required"{% if not is_editable %} disabled="disabled"{% endif %}>
                 <option value="" disabled="disabled" selected="selected"></option>
                 {% for d in departments %}
                 <option value="{{d.value}}" {%if d.selected %}selected="selected"{% endif %}>
@@ -94,9 +94,11 @@
 		<div>
 			<label for="user_title" class="user_form_label" style="vertical-align:top"><span class="star">*</span>Тема работы:</label>
 			<textarea id="user_title" name="title" class="user_title inp"
-                      rows="3" style="width:400px" maxlength="250" required="required">{{enroll.title}}</textarea>
+                      rows="3" style="width:400px" maxlength="250" required="required"{% if not is_editable %} readonly="readonly" disabled="disabled"{% endif %}>{{enroll.title}}</textarea>
 		</div>
+		{% if is_editable %}
 		<div><input type="submit" value="Отправить" class="inp btn_save"/></div>
+		{% endif %}
 	</form>
 </div>
 {% endblock %}

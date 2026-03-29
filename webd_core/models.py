@@ -84,10 +84,41 @@ class Enrollment(models.Model):
         return f"{self.student.full_name} – {self.year.year} год, группа {self.group.name}"
 
 def upload_to_enrollment_path(instance, filename):
-    year_value = instance.enrollment.year
-    group_value = instance.enrollment.group
-    student_value = instance.enrollment.student
-    return os.path.join('students', str(year_value),str(group_value),str(student_value), filename)
+    enrollment = instance.enrollment
+    year_value = enrollment.year.year
+    course_value = (enrollment.courses or "").strip() or "0"
+    group_value = enrollment.group.name
+    login_value = enrollment.student.login
+
+    interim_map = {
+        Document.INTERIM_REPORT: ("interim", "report"),
+        Document.INTERIM_PRESENTATION: ("interim", "presentation"),
+    }
+    final_map = {
+        Document.PRACTICE_NIR_REPORT: ("final", "preport"),
+        Document.THESIS_TEXT: ("final", "report"),
+        Document.THESIS_PRESENTATION: ("final", "presentation"),
+        Document.PLAGIARISM_CHECK: ("final", "antiplagiat"),
+        Document.ADVISOR_REVIEW: ("final", "supreview"),
+        Document.REVIEW: ("final", "review"),
+        # Для продолжающих обучение оставляем финальные "старые" типы в папке final
+        Document.FINAL_REPORT: ("final", "report"),
+        Document.FINAL_PRESENTATION: ("final", "presentation"),
+    }
+
+    section = interim_map.get(instance.doc_type) or final_map.get(instance.doc_type) or ("files", "other")
+    safe_filename = os.path.basename(filename)
+    return os.path.join(
+        "groups",
+        "projects",
+        str(year_value),
+        str(course_value),
+        group_value,
+        login_value,
+        section[0],
+        section[1],
+        safe_filename,
+    )
 
 class Document(models.Model):
     INTERIM_REPORT       = 'interim_report'

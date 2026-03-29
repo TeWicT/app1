@@ -21,7 +21,7 @@
       {# Заголовок года один раз #}
       <h2>
         {{ year_panel.grouper }}–{{ year_panel.grouper|add:1 }} уч. год
-        ({{ year_panel.list|length }} раб.)
+        ({% with first_panel=year_panel.list.0 %}{{ first_panel.year_total }}{% endwith %} раб.)
       </h2>
 
       {# Далее сгруппируем по кафедре внутри этого года #}
@@ -30,7 +30,7 @@
       {% for dept_panel in depts_list %}
         <h3>
           Кафедра: {{ dept_panel.grouper }}
-          ({% with dept_panel.list|length as dept_rows_count %}{{ dept_rows_count }}{% endwith %} раб.)
+          ({% with first_panel=dept_panel.list.0 %}{{ first_panel.dept_total }}{% endwith %} раб.)
         </h3>
 
         {# Итерируемся по каждой группе в этой кафедре #}

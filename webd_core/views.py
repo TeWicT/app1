@@ -1,4 +1,6 @@
 from django.shortcuts import render, redirect
+from pathlib import Path
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
@@ -116,6 +118,57 @@ def _build_row(enroll, doc_types):
     }
 
 
+def _write_legacy_index_for_enrollment(enrollment):
+    """
+    Создает/обновляет index.clj в формате legacy:
+    media/groups/projects/{year}/{course}/{group}/{login}/index.clj
+    """
+    year_value = enrollment.year.year
+    course_value = (enrollment.courses or "").strip() or "0"
+    group_value = enrollment.group.name
+    login_value = enrollment.student.login
+    base_dir = Path(settings.MEDIA_ROOT) / "groups" / "projects" / str(year_value) / str(course_value) / group_value / login_value
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    file_key_map = {
+        Document.INTERIM_REPORT: "int-report",
+        Document.INTERIM_PRESENTATION: "int-slides",
+        Document.FINAL_REPORT: "fin-report",
+        Document.FINAL_PRESENTATION: "fin-slides",
+        Document.PRACTICE_NIR_REPORT: "fin-preport",
+        Document.THESIS_TEXT: "fin-report",
+        Document.THESIS_PRESENTATION: "fin-slides",
+        Document.PLAGIARISM_CHECK: "fin-antiplagiat",
+        Document.ADVISOR_REVIEW: "fin-sup-review",
+        Document.REVIEW: "fin-review",
+    }
+
+    docs = enrollment.documents.all().order_by("doc_type")
+    files_parts = []
+    for doc in docs:
+        legacy_key = file_key_map.get(doc.doc_type)
+        if not legacy_key:
+            continue
+        ts = doc.uploaded_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        files_parts.append(f":{legacy_key} {{:creation-time \"{ts}\"}}")
+
+    files_body = ", ".join(files_parts)
+    content = (
+        "{"
+        f":department \"{(enrollment.department or '').replace(chr(34), chr(39))}\", "
+        f":name \"{(enrollment.student.full_name or '').replace(chr(34), chr(39))}\", "
+        f":identity-time \"{timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\", "
+        f":adviser-name \"{(enrollment.adviser_name or '').replace(chr(34), chr(39))}\", "
+        f":title \"{(enrollment.title or '').replace(chr(34), chr(39))}\", "
+        f":adviser-rank \"{(enrollment.adviser_rank or '').replace(chr(34), chr(39))}\", "
+        f":adviser-position \"{(enrollment.adviser_position or '').replace(chr(34), chr(39))}\", "
+        f":files {{{files_body}}}, "
+        f":adviser-status \"{(enrollment.adviser_status or '').replace(chr(34), chr(39))}\""
+        "}"
+    )
+    (base_dir / "index.clj").write_text(content, encoding="utf-8")
+
+
 def _attach_indexes(rows):
     return [dict(row, index=idx) for idx, row in enumerate(rows, start=1)]
 
@@ -159,7 +212,12 @@ def _build_group_panels(grouped):
     for year in sorted(grouped.keys(), reverse=True):
         depts = grouped[year]
         year_total = sum(len(group_data['rows']) for dept_data in depts.values() for group_data in dept_data.values())
-        for dept in sorted(depts.keys(), key=lambda d: d or ''):
+        sorted_depts = sorted(
+            depts.keys(),
+            key=lambda dept_name: sum(len(group_data['rows']) for group_data in depts[dept_name].values()),
+            reverse=True,
+        )
+        for dept in sorted_depts:
             groups = depts[dept]
             dept_total = sum(len(group_data['rows']) for group_data in groups.values())
             for group_name in sorted(groups.keys()):
@@ -254,6 +312,11 @@ def page_identity(request,foundyear):
         messages.error(request, "Не удалось найти запись обучения для выбранного года.")
         return redirect('page_webd')
     print(student,enrollment)
+    # Блокируем редактирование, если тема утверждена преподавателем
+    has_approved_topic = TopicRequest.objects.filter(
+        enrollment=enrollment, status=TopicRequest.STATUS_APPROVED
+    ).exists()
+    is_editable = not has_approved_topic
     # Подготовка справочников
     positions = [{'value': value, 'label': label, 'selected': value == enrollment.adviser_position} for value, label in ADVISER_POSITION_CHOICES]
     all_ranks = ['без звания','доцент','профессор']
@@ -261,6 +324,9 @@ def page_identity(request,foundyear):
     departments     = [{'value': d, 'selected': d == enrollment.department}  for d in DEPARTMENTS]
 
     if request.method == 'POST':
+        if not is_editable:
+            messages.info(request, "У вас уже утверждена тема. Редактирование данных регистрации недоступно.")
+            return redirect('page_identity', foundyear=year.year)
         form = StudentForm(request.POST, instance=enrollment)
         if form.is_valid():
             form.save()
@@ -276,7 +342,7 @@ def page_identity(request,foundyear):
         'positions': positions,
         'ranks': ranks,
         'departments': departments,
-        'is_editable': True,
+        'is_editable': is_editable,
         'have_prev_year': False,
         'foundyear': foundyear,
     })
@@ -374,6 +440,7 @@ def upload_view(request,foundyear):
                 document, _ = Document.objects.get_or_create(enrollment=enrollment, doc_type=doc_type)
                 document.file = uploaded_file
                 document.save()
+                _write_legacy_index_for_enrollment(enrollment)
                 results[doc_type] = {"success": True, "result": "Файл успешно загружен"}
 
         elif "delete-file" in request.POST:
@@ -381,6 +448,7 @@ def upload_view(request,foundyear):
                 document = Document.objects.get(enrollment=enrollment, doc_type=doc_type)
                 document.file.delete(save=False)
                 document.delete()
+                _write_legacy_index_for_enrollment(enrollment)
                 results[doc_type] = {"success": True, "result": "Файл удалён"}
             except Document.DoesNotExist:
                 results[doc_type] = {"success": False, "result": "Файл не найден"}
@@ -725,6 +793,16 @@ def _handle_topic_update(request, teacher):
     topic.course = course_int
     topic.capacity = capacity_int
     topic.save(update_fields=['title', 'description', 'direction', 'course', 'capacity', 'updated_at'])
+    # Протолкнуть изменения в записи студентов, у кого эта тема уже одобрена
+    approved_requests = topic.requests.filter(status=TopicRequest.STATUS_APPROVED).select_related('enrollment', 'topic__teacher')
+    for tr in approved_requests:
+        enrollment = tr.enrollment
+        # Синхронизируем ключевые поля, как при утверждении заявки
+        enrollment.title = topic.title
+        enrollment.department = topic.department
+        enrollment.adviser_name = topic.teacher.full_name
+        enrollment.adviser_position = topic.teacher.adviser_position
+        enrollment.save(update_fields=['title', 'department', 'adviser_name', 'adviser_position'])
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         messages.success(request, "Данные темы обновлены.")
     return True, []
