@@ -24,5 +24,5 @@ RUN mkdir -p /app/staticfiles /app/media
 
 CMD ["bash", "-c", "python manage.py import_legacy_projects && \
                     python manage.py collectstatic --noinput && \
-                    gunicorn app1.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
+                    daphne -b 0.0.0.0 -p 8000 app1.asgi:application"]
 

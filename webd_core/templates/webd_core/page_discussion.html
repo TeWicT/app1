@@ -35,4 +35,55 @@
     if (box) { box.scrollTop = box.scrollHeight; }
   })();
 </script>
+<script>
+  (function() {
+    var threadId = "{{ thread.id }}";
+    if (!threadId) return;
+    var scheme = (window.location.protocol === "https:") ? "wss" : "ws";
+    var socketUrl = scheme + "://" + window.location.host + "/ws/discussion/" + threadId + "/";
+    var ws = new WebSocket(socketUrl);
+
+    var messagesBox = document.getElementById('messages');
+    var form = document.querySelector('form[method="post"]');
+    var textarea = form ? form.querySelector('textarea[name="text"]') : null;
+
+    ws.onmessage = function(evt) {
+      try {
+        var data = JSON.parse(evt.data);
+        if (data.event === 'message') {
+          var wrap = document.createElement('div');
+          wrap.style.marginBottom = '10px';
+          var header = document.createElement('div');
+          header.style.fontWeight = '600';
+          header.innerHTML = (data.author_name || '—') + ' <span style="color:#888; font-weight:400;">' + (data.created_at || '') + '</span>';
+          var body = document.createElement('div');
+          body.style.whiteSpace = 'pre-wrap';
+          body.textContent = data.text || '';
+          wrap.appendChild(header);
+          wrap.appendChild(body);
+          messagesBox.appendChild(wrap);
+          messagesBox.scrollTop = messagesBox.scrollHeight;
+        }
+      } catch (e) {
+        console.error('WS parse error', e);
+      }
+    };
+
+    if (form && textarea) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var text = (textarea.value || '').trim();
+        if (!text) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'message', text: text }));
+          textarea.value = '';
+          textarea.focus();
+        } else {
+          // Фоллбек — на случай отсутствия WS
+          form.submit();
+        }
+      });
+    }
+  })();
+</script>
 {% endblock %}

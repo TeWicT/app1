@@ -16,13 +16,27 @@ services:
     restart: unless-stopped
     depends_on:
       - db
+      - redis
     env_file:
       - .env
+    environment:
+      CHANNEL_USE_REDIS: "True"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
     expose:
       - "8000"
     volumes:
       - app1_static:/app/staticfiles
       - ./media:/app/media  
+
+  redis:
+    image: redis:7-alpine
+    container_name: app1_redis
+    restart: unless-stopped
+    volumes:
+      - app1_redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
 
   nginx:
     image: nginx:1.27-alpine
@@ -40,5 +54,6 @@ services:
 volumes:
   app1_pg_data:
   app1_static:
+  app1_redis_data:
 
 

@@ -28,10 +28,18 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
+# CSRF: allow requests coming from the public site.
+# Without this Django can reject POST with "Origin checking failed".
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    'https://redos.cs.petrsu.ru,http://redos.cs.petrsu.ru'
+).split(',')
+
 
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -77,6 +85,28 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'app1.wsgi.application'
+ASGI_APPLICATION = 'app1.asgi.application'
+
+# Channels: use Redis in production for multi-worker/multi-container setups.
+# For local development (without Redis) it falls back to in-memory.
+if os.getenv('CHANNEL_USE_REDIS', 'False') == 'True':
+    REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
+    REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+    REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"],
+            },
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer'
+        }
+    }
 
 
 # Database
