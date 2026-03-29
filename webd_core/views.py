@@ -16,6 +16,8 @@ from .models import (
     Group,
     Topic,
     TopicRequest,
+    DiscussionThread,
+    DiscussionMessage,
     DEPARTMENTS,
     ADVISER_POSITION_CHOICES,
     COURSE_CHOICES,
@@ -916,3 +918,125 @@ def _create_topic_request(enrollment, topic_id, request):
 def logout_view(request):
     logout(request)
     return redirect('page_webd')
+
+
+@login_required(login_url='page_webd')
+def student_discussion(request):
+    student = getattr(request, 'student_profile', None)
+    if not student:
+        messages.error(request, "Страница доступна только студентам.")
+        return redirect('page_webd')
+    try:
+        year = Year.objects.get(year=request.foundyear)
+        enrollment = Enrollment.objects.get(student=student, year=year)
+    except (Year.DoesNotExist, Enrollment.DoesNotExist):
+        messages.error(request, "Не найдена запись обучения для выбранного года.")
+        return redirect('page_webd')
+
+    approved_req = TopicRequest.objects.filter(
+        enrollment=enrollment, status=TopicRequest.STATUS_APPROVED
+    ).select_related('topic', 'topic__teacher').first()
+    if not approved_req:
+        messages.info(request, "У вас нет утверждённой темы для обсуждения.")
+        return redirect('student_topics')
+
+    thread, _ = DiscussionThread.objects.get_or_create(topic=approved_req.topic)
+    return redirect('discussion_view', thread_id=thread.id)
+
+
+@login_required(login_url='page_webd')
+def teacher_discussions(request):
+    teacher = getattr(request, 'teacher_profile', None)
+    if not teacher:
+        messages.error(request, "Страница доступна только преподавателям.")
+        return redirect('page_webd')
+
+    topics = teacher.topics.prefetch_related(
+        Prefetch(
+            'requests',
+            queryset=TopicRequest.objects.filter(status=TopicRequest.STATUS_APPROVED).select_related(
+                'enrollment__student', 'enrollment__year'
+            )
+        )
+    ).order_by('-created_at')
+
+    items = []
+    for t in topics:
+        approved = list(t.requests.all())
+        students = [f"{r.enrollment.student.full_name} ({r.enrollment.group.name})" for r in approved]
+        thread_id = None
+        # Создаем поток обсуждения автоматически, если есть хотя бы один утвержденный студент
+        if approved:
+            thread, _ = DiscussionThread.objects.get_or_create(topic=t)
+            thread_id = thread.id
+        items.append({
+            'topic': t,
+            'students': students,
+            'thread_id': thread_id,
+        })
+
+    return render(request, 'webd_core/page_teacher_discussions.html', {
+        'items': items,
+        'foundyear': request.foundyear,
+    })
+
+
+@login_required(login_url='page_webd')
+@require_http_methods(["GET", "POST"])
+def discussion_view(request, thread_id: int):
+    thread = DiscussionThread.objects.select_related('topic', 'topic__teacher').filter(id=thread_id).first()
+    if not thread:
+        messages.error(request, "Обсуждение не найдено.")
+        return redirect('page_webd')
+
+    # Проверка доступа
+    teacher = getattr(request, 'teacher_profile', None)
+    student = getattr(request, 'student_profile', None)
+    allowed = False
+    if teacher and thread.topic.teacher_id == teacher.id:
+        allowed = True
+    elif student:
+        try:
+            year = Year.objects.get(year=request.foundyear)
+            enrollment = Enrollment.objects.get(student=student, year=year)
+        except (Year.DoesNotExist, Enrollment.DoesNotExist):
+            enrollment = None
+        if enrollment and TopicRequest.objects.filter(
+            topic=thread.topic, enrollment=enrollment, status=TopicRequest.STATUS_APPROVED
+        ).exists():
+            allowed = True
+    if not allowed:
+        messages.error(request, "Доступ к обсуждению запрещён.")
+        return redirect('page_webd')
+
+    if request.method == 'POST':
+        text = (request.POST.get('text') or '').strip()
+        if text:
+            author_name = ''
+            if teacher:
+                author_name = teacher.full_name
+            elif student:
+                author_name = student.full_name
+            DiscussionMessage.objects.create(
+                thread=thread,
+                author=request.user if request.user.is_authenticated else None,
+                author_name=author_name or (request.user.get_username() if request.user.is_authenticated else 'Гость'),
+                text=text,
+            )
+        return redirect('discussion_view', thread_id=thread.id)
+
+    approved_requests = thread.topic.requests.filter(status=TopicRequest.STATUS_APPROVED).select_related(
+        'enrollment__student'
+    )
+    student_names = [r.enrollment.student.full_name for r in approved_requests]
+
+    messages_qs = thread.messages.select_related('author').all()
+
+    return render(request, 'webd_core/page_discussion.html', {
+        'thread': thread,
+        'topic': thread.topic,
+        'teacher_name': thread.topic.teacher.full_name,
+        'student_names': student_names,
+        'messages': messages_qs,
+        'foundyear': request.foundyear,
+    })

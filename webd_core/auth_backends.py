@@ -181,19 +181,23 @@ class LdapBackend(BaseBackend):
             defaults={"is_latest": False},
         )
 
-        # Курс из homeDirectory, например: /home/04/etitov -> "4"
+        # Курс: по требованию — брать 3-й символ из OU группы (например, ou=22406 -> '4')
+        # Если не удаётся — фоллбек к homeDirectory (/home/NN/login -> 'N')
         courses_value = ""
-        home_dirs = attrs.get("homeDirectory") or []
-        if home_dirs:
-            raw_hd = home_dirs[0]
-            # Ожидаемый формат: /home/NN/login
-            parts = str(raw_hd).strip("/").split("/")
-            if len(parts) >= 3 and parts[0] == "home":
-                year_part = parts[1]  # '04'
-                try:
-                    courses_value = str(int(year_part))  # '04' -> 4 -> '4'
-                except (TypeError, ValueError):
-                    courses_value = ""
+        if group_name and len(group_name) >= 3 and group_name.isdigit():
+            courses_value = group_name[2]
+        else:
+            home_dirs = attrs.get("homeDirectory") or []
+            if home_dirs:
+                raw_hd = home_dirs[0]
+                # Ожидаемый формат: /home/NN/login
+                parts = str(raw_hd).strip("/").split("/")
+                if len(parts) >= 3 and parts[0] == "home":
+                    year_part = parts[1]  # '04'
+                    try:
+                        courses_value = str(int(year_part))  # '04' -> 4 -> '4'
+                    except (TypeError, ValueError):
+                        courses_value = ""
 
         # Создаём Enrollment, если её ещё нет
         Enrollment.objects.get_or_create(

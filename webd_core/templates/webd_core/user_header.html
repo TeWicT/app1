@@ -8,12 +8,18 @@
     <a href="{% url 'teacher_topics' %}" {% if page_teacher_topics %}class="user_no_file"{% endif %}>
         Предложить тему{% if request.pending_request_count %} ({{ request.pending_request_count }}){% endif %}
     </a> |
+    <a href="{% url 'teacher_discussions' %}">
+        Обсуждение работ
+    </a> |
     {% else %}
     <a href="{% url 'student_topics' %}" {% if page_topic_select %}class="user_no_file"{% endif %}>
         Выбрать тему
         {% if request.topic_notifications.decided %}
             ({{ request.topic_notifications.decided }})
         {% endif %}
+    </a> |
+    <a href="{% url 'student_discussion' %}">
+        Обсуждение работы
     </a> |
     <a href="{% url 'page_identity' foundyear=foundyear %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
         работы</a> |

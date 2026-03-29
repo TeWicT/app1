@@ -1,0 +1,26 @@
+{% extends "webd_core/layout.html" %}
+{% block content %}
+{% include "webd_core/user_header.html" with page_teacher_topics=True %}
+<div class="container" style="max-width: 960px; margin: 0 auto; padding: 16px;">
+  <h2 style="margin: 0 0 12px 0;">Обсуждение работ</h2>
+  {% if items %}
+    <div>
+      {% for it in items %}
+        <div style="border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:10px;">
+          <div style="font-weight:600; font-size:16px; margin-bottom:6px;">{{ it.topic.title }}</div>
+          <div style="color:#444; margin-bottom:6px;">Студенты: {% if it.students %}{{ it.students|join:", " }}{% else %}<span style="color:#999;">нет утверждённых студентов</span>{% endif %}</div>
+          <div>
+            {% if it.thread_id %}
+              <a href="{% url 'discussion_view' it.thread_id %}" style="color:#2F7DF6;">Открыть обсуждение</a>
+            {% else %}
+              <span style="color:#999;">Обсуждение станет доступно после утверждения хотя бы одного студента</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div style="color:#666;">У вас пока нет тем.</div>
+  {% endif %}
+</div>
+{% endblock %}

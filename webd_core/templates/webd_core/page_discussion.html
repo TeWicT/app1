@@ -1,0 +1,38 @@
+{% extends "webd_core/layout.html" %}
+{% block content %}
+{% include "webd_core/user_header.html" %}
+<div class="container" style="max-width: 960px; margin: 0 auto; padding: 16px;">
+  <h2 style="margin: 0 0 12px 0;">Обсуждение работы</h2>
+  <div style="border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+    <div style="font-weight: 600; font-size: 18px; margin-bottom: 6px;">{{ topic.title }}</div>
+    <div style="color: #444; margin-bottom: 6px;">Преподаватель: {{ teacher_name }}</div>
+    <div style="color: #444;">Студенты: {{ student_names|join:", " }}</div>
+  </div>
+
+  <div id="messages" style="height: 380px; border: 1px solid #ddd; border-radius: 6px; padding: 12px; overflow-y: auto; background: #fafafa; margin-bottom: 10px;">
+    {% if messages %}
+      {% for m in messages %}
+        <div style="margin-bottom: 10px;">
+          <div style="font-weight: 600;">{{ m.author_name }} <span style="color: #888; font-weight: 400;">{{ m.created_at|date:"d.m.Y H:i" }}</span></div>
+          <div style="white-space: pre-wrap;">{{ m.text }}</div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div style="color:#666;">Пока нет сообщений.</div>
+    {% endif %}
+  </div>
+
+  <form method="post" action="" style="display: flex; gap: 8px;">
+    {% csrf_token %}
+    <textarea name="text" rows="2" placeholder="Напишите сообщение..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"></textarea>
+    <button type="submit" style="padding: 8px 14px; border: none; background: #2F7DF6; color: #fff; border-radius: 6px; cursor: pointer;">Отправить</button>
+  </form>
+</div>
+<script>
+  // Прокрутка к последнему сообщению
+  (function() {
+    var box = document.getElementById('messages');
+    if (box) { box.scrollTop = box.scrollHeight; }
+  })();
+</script>
+{% endblock %}

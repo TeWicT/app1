@@ -12,6 +12,9 @@ urlpatterns = [
     path('query/report/', views.query_report, name='query_report'),
     path('topics/manage/', views.teacher_topics_view, name='teacher_topics'),
     path('topics/select/', views.student_topics_view, name='student_topics'),
+    path('discussion/', views.student_discussion, name='student_discussion'),
+    path('discussions/', views.teacher_discussions, name='teacher_discussions'),
+    path('discussion/<int:thread_id>/', views.discussion_view, name='discussion_view'),
 
 
 ]

@@ -241,3 +241,31 @@ class TopicRequest(models.Model):
 
     def __str__(self):
         return f"{self.enrollment.student.full_name} → {self.topic.title} ({self.get_status_display()})"
+
+
+class DiscussionThread(models.Model):
+    topic = models.OneToOneField(Topic, on_delete=models.CASCADE, related_name='discussion', verbose_name="Тема")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Обсуждение темы"
+        verbose_name_plural = "Обсуждения тем"
+
+    def __str__(self):
+        return f"Обсуждение: {self.topic.title}"
+
+
+class DiscussionMessage(models.Model):
+    thread = models.ForeignKey(DiscussionThread, on_delete=models.CASCADE, related_name='messages', verbose_name="Обсуждение")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='discussion_messages', verbose_name="Автор")
+    author_name = models.CharField("Имя автора", max_length=200)
+    text = models.TextField("Сообщение")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "Сообщение обсуждения"
+        verbose_name_plural = "Сообщения обсуждения"
+
+    def __str__(self):
+        return f"{self.author_name}: {self.text[:30]}"
