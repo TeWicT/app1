@@ -269,8 +269,8 @@ def _build_flat_sections(flat_rows):
 
 def page_webd(request):
     foundyear = request.foundyear
-    year = Year.objects.values_list('year', flat=True)
-    groups = Group.objects.filter(year__year=foundyear).values('name').distinct()
+    year = Year.objects.order_by('-year').values_list('year', flat=True)
+    groups = Group.objects.values('name').distinct().order_by('name')
     departments     = [{'value': d}  for d in DEPARTMENTS]
     error = None
     if request.method == 'POST':

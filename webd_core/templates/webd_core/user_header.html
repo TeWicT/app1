@@ -8,7 +8,7 @@
     <a href="{% url 'teacher_topics' %}" {% if page_teacher_topics %}class="user_no_file"{% endif %}>
         Предложить тему{% if request.pending_request_count %} ({{ request.pending_request_count }}){% endif %}
     </a> |
-    <a href="{% url 'teacher_discussions' %}">
+    <a href="{% url 'teacher_discussions' %}" {% if page_teacher_discussions %}class="user_no_file"{% endif %}>
         Обсуждение работ
     </a> |
     {% else %}
