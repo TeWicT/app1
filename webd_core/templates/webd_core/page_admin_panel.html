@@ -1,0 +1,627 @@
+{% extends "webd_core/layout.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Админ-панель{% endblock %}
+
+{% block content %}
+<div class="webd_topics_manage">
+    {% include "webd_core/user_header.html" with page_admin_panel=True %}
+
+    <div class="topic-create-block">
+        <h2>Админ-панель</h2>
+        <h3>Добавить темы (с привязкой к преподавателю)</h3>
+
+        <form method="post" class="topic-form" id="new-topics-form" action="{% url 'admin_panel' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_batch"/>
+
+            <div style="margin: 8px 0 12px 0;">
+                <label>
+                    Преподаватель:
+                    <select name="teacher_id" class="table-select" required>
+                        {% for t in teachers %}
+                        <option value="{{ t.id }}">{{ t.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+
+            <table class="topics-table topics-table--new" id="new-topics-table">
+                <thead>
+                    <tr>
+                        <th>Тема работы</th>
+                        <th>Описание</th>
+                        <th>Направление</th>
+                        <th>Курс</th>
+                        <th>Количество студентов</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="new-topic-row">
+                        <td><input type="text" name="title[]" class="table-input" required/></td>
+                        <td><textarea name="description[]" class="table-textarea"></textarea></td>
+                        <td>
+                            <select name="direction[]" class="table-input" required>
+                                <option value="Математика">Математика</option>
+                                <option value="ПМИ">ПМИ</option>
+                                <option value="ИСИТ">ИСИТ</option>
+                                <option value="ПИ">ПИ</option>
+                                <option value="ПО">ПО</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select name="course[]" class="table-select">
+                                {% for value,label in course_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td><input type="number" name="capacity[]" min="1" value="1" class="table-input table-input__number" required/></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="topic-form__actions">
+                <button type="button" class="inp" id="add-topic-row">+</button>
+                <button type="submit" class="inp">Сохранить темы</button>
+            </div>
+        </form>
+    </div>
+
+    <style>
+        .topics-table { width: 100%; table-layout: fixed; }
+        .topics-table th:nth-child(1) { width: 4%; }
+        .topics-table th:nth-child(2) { width: 18%; }
+        .topics-table th:nth-child(3) { width: 20%; }
+        .topics-table th:nth-child(4) { width: 10%; }
+        .topics-table th:nth-child(5) { width: 6%; }
+        .topics-table th:nth-child(6) { width: 10%; }
+        .topics-table th:nth-child(7) { width: 20%; }
+        .topics-table th:nth-child(8) { width: 12%; }
+
+        .topics-table--new { width: 100%; table-layout: fixed; }
+        .topics-table--new th:nth-child(1) { width: 20%; }
+        .topics-table--new th:nth-child(2) { width: 30%; }
+        .topics-table--new th:nth-child(3) { width: 15%; }
+        .topics-table--new th:nth-child(4) { width: 15%; }
+        .topics-table--new th:nth-child(5) { width: 20%; }
+
+        .topic-row .topic-field--edit { display: none; }
+        .topic-row .topic-field--view { display: block; }
+        .topic-row.is-editing .topic-field--edit { display: block; }
+        .topic-row.is-editing .topic-field--view { display: none; }
+
+        .topic-field--edit { width: 100%; display: flex; align-items: center; }
+        .topic-field--edit .table-input,
+        .topic-field--edit .table-textarea,
+        .topic-field--edit .table-select {
+            width: 100%;
+            padding: 6px 12px;
+            font-size: 12pt;
+            font-family: serif;
+            line-height: 1.5;
+            color: black;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            box-sizing: border-box;
+        }
+        .topic-field--edit .table-textarea { display: block; min-height: 80px; resize: vertical; }
+
+        .topics-table--new .table-input,
+        .topics-table--new .table-textarea,
+        .topics-table--new .table-select {
+            width: 100%;
+            padding: 6px 12px;
+            font-size: 12pt;
+            font-family: serif;
+            line-height: 1.5;
+            color: black;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            box-sizing: border-box;
+        }
+        .topics-table--new .table-textarea { min-height: 80px; resize: vertical; }
+
+        .topic-row .topic-edit-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px 8px;
+            color: #0d6efd;
+            transition: color 0.15s ease-in-out;
+        }
+        .topic-row .actions-cell .save-button { display: none; padding: 4px 12px; font-size: 14px; }
+        .topic-row.is-editing .actions-cell .save-button { display: inline-block; }
+
+        .topic-delete-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #dc3545;
+            font-size: 18px;
+            padding: 4px 8px;
+            margin-left: 6px;
+            transition: color 0.15s ease-in-out;
+        }
+
+        .topics-table td { vertical-align: middle; word-wrap: break-word; }
+        .topics-table--new td { vertical-align: middle; }
+
+        .topic-form__actions .inp,
+        .save-button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 12pt;
+            font-family: serif;
+            font-weight: normal;
+            line-height: 1.5;
+            text-align: center;
+            text-decoration: none;
+            vertical-align: middle;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+
+        .topic-form__actions { margin-top: 15px; display: flex; gap: 10px; }
+
+        .topic-details { margin: 0; }
+        .topic-details summary { cursor: pointer; font-weight: 500; padding: 4px 0; list-style: none; position: relative; padding-left: 20px; user-select: none; }
+        .topic-details summary::-webkit-details-marker { display: none; }
+        .topic-details summary::before { content: '▶'; position: absolute; left: 0; transition: transform 0.3s ease; display: inline-block; }
+        .topic-details[open] summary::before { transform: rotate(90deg); }
+
+        .topic-details .topic-description {
+            overflow: hidden;
+            padding: 0 0 0 20px;
+            margin: 0;
+            height: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease-in 0.2s,
+                        padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0.6s;
+        }
+        .topic-details .topic-description.expanding {
+            opacity: 1 !important;
+            visibility: visible !important;
+            padding: 12px 0 12px 20px;
+            margin-top: 8px;
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease-in 0.1s,
+                        padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0s;
+        }
+        .topic-details .topic-description.collapsing {
+            opacity: 0;
+            visibility: hidden;
+            transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.3s ease-out,
+                        padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0s linear 0.5s;
+        }
+        .topic-details[open] .topic-description { opacity: 1 !important; visibility: visible !important; }
+
+        .admin-teacher-block { margin-top: 28px; }
+        .admin-teacher-block__title { margin: 0 0 10px 0; }
+    </style>
+
+    <div class="topics-table-wrapper">
+        {% if teacher_panels %}
+            {% for panel in teacher_panels %}
+                <div class="admin-teacher-block">
+                    <h3 class="admin-teacher-block__title">{{ panel.teacher.full_name }}</h3>
+
+                    {% if panel.free_topics %}
+                        <h4>Свободные темы</h4>
+                        <table class="topics-table">
+                            <thead>
+                                <tr>
+                                    <th>№</th>
+                                    <th>Тема работы</th>
+                                    <th>Описание</th>
+                                    <th>Направление</th>
+                                    <th>Курс</th>
+                                    <th>Количество студентов</th>
+                                    <th>Студенты</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in panel.free_topics %}
+                                    {% include "webd_core/topic_row_fragment_admin.html" with row=row %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+
+                    {% for course in panel.sorted_courses %}
+                        <h4>{{ course }} курс</h4>
+                        <table class="topics-table">
+                            <thead>
+                                <tr>
+                                    <th>№</th>
+                                    <th>Тема работы</th>
+                                    <th>Описание</th>
+                                    <th>Направление</th>
+                                    <th>Курс</th>
+                                    <th>Количество студентов</th>
+                                    <th>Студенты</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in panel.course_topics|get_item:course %}
+                                    {% include "webd_core/topic_row_fragment_admin.html" with row=row %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endfor %}
+
+                    {% if not panel.free_topics and not panel.course_topics %}
+                        <p>Пока нет тем.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>Преподавателей пока нет.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function() {
+    const table = document.getElementById('new-topics-table')?.querySelector('tbody');
+    const addBtn = document.getElementById('add-topic-row');
+    if (!table || !addBtn) return;
+    addBtn.addEventListener('click', function() {
+        const rows = table.querySelectorAll('.new-topic-row');
+        if (!rows.length) return;
+        const lastRow = rows[rows.length - 1];
+        const clone = lastRow.cloneNode(true);
+
+        const prevInputs = lastRow.querySelectorAll('input, textarea, select');
+        const newInputs = clone.querySelectorAll('input, textarea, select');
+
+        newInputs.forEach((el, idx) => {
+            const prev = prevInputs[idx];
+            if (!prev) return;
+            const name = el.name || '';
+            if (name === 'title[]' || name === 'description[]') {
+                if (el.tagName.toLowerCase() === 'select') el.selectedIndex = 0;
+                else el.value = '';
+            } else {
+                if (el.tagName.toLowerCase() === 'select') el.value = prev.value;
+                else el.value = prev.value;
+            }
+        });
+
+        table.appendChild(clone);
+    });
+})();
+
+(function() {
+    document.querySelectorAll('.topic-edit-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const row = btn.closest('.topic-row');
+            if (row) row.classList.toggle('is-editing');
+        });
+    });
+})();
+
+(function() {
+    const form = document.getElementById('new-topics-form');
+    if (!form) return;
+    const table = document.getElementById('new-topics-table');
+    const tbody = table ? table.querySelector('tbody') : null;
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Сохранение...';
+
+        let url = form.getAttribute('action');
+        if (!url || url === '') url = window.location.pathname;
+        url = String(url);
+
+        fetch(url, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        const error = new Error(data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+                        error.response = { json: () => Promise.resolve(data) };
+                        throw error;
+                    }
+                    return data;
+                });
+            }
+            return response.text().then(html => {
+                const error = new Error('Сервер вернул не JSON ответ. Возможно, произошла ошибка на сервере.');
+                console.error('HTML ответ:', html.substring(0, 500));
+                throw error;
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                form.reset();
+                if (tbody) {
+                    const rows = tbody.querySelectorAll('.new-topic-row');
+                    for (let i = 1; i < rows.length; i++) rows[i].remove();
+                }
+                window.location.reload();
+            } else {
+                alert('Ошибки: ' + (data.errors || []).join(', '));
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении:', error);
+            let errorMessage = 'Ошибка при сохранении: ' + error.message;
+            if (error.response) {
+                error.response.json().then(data => {
+                    if (data.errors) errorMessage = 'Ошибки: ' + data.errors.join(', ');
+                    alert(errorMessage);
+                }).catch(() => alert(errorMessage));
+            } else {
+                alert(errorMessage);
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
+    });
+})();
+
+(function() {
+    document.querySelectorAll('form[id^="topic-form-"]').forEach(form => {
+        const submitBtn = document.querySelector(`button[form="${form.id}"]`);
+        if (!submitBtn) return;
+        submitBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const row = form.closest('.topic-row');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Сохранение...';
+
+            let url = form.getAttribute('action');
+            if (!url || url === '') url = window.location.pathname;
+            url = String(url);
+
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (!response.ok) {
+                            const error = new Error(data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+                            error.response = { json: () => Promise.resolve(data) };
+                            throw error;
+                        }
+                        return data;
+                    });
+                }
+                return response.text().then(html => {
+                    const error = new Error('Сервер вернул не JSON ответ. Возможно, произошла ошибка на сервере.');
+                    console.error('HTML ответ:', html.substring(0, 500));
+                    throw error;
+                });
+            })
+            .then(data => {
+                if (!data || !data.success) throw new Error(data && data.errors ? data.errors.join(', ') : 'Ошибка сохранения');
+
+                if (row) {
+                    const titleInput = row.querySelector('input[name="title"]');
+                    const descriptionTextarea = row.querySelector('textarea[name="description"]');
+                    const directionInput = row.querySelector('input[name="direction"]');
+                    const courseInput = row.querySelector('input[name="course"]');
+                    const capacityInput = row.querySelector('input[name="capacity"]');
+
+                    if (titleInput) {
+                        const viewTitle = row.querySelector('td:nth-child(2) .topic-field--view');
+                        if (viewTitle) viewTitle.textContent = titleInput.value.trim() || titleInput.value;
+                    }
+                    if (descriptionTextarea) {
+                        const viewDescContainer = row.querySelector('td:nth-child(3) .topic-field--view');
+                        if (viewDescContainer) {
+                            const descElem = viewDescContainer.querySelector('.topic-description');
+                            const descValue = descriptionTextarea.value.trim();
+                            if (descElem) descElem.textContent = descValue || 'Описание не задано';
+                        }
+                    }
+                    if (directionInput) {
+                        const viewDir = row.querySelector('td:nth-child(4) .topic-field--view');
+                        if (viewDir) viewDir.textContent = directionInput.value.trim() || '—';
+                    }
+                    if (courseInput) {
+                        const viewCourse = row.querySelector('td:nth-child(5) .topic-field--view');
+                        if (viewCourse) viewCourse.textContent = courseInput.value;
+                    }
+
+                    let capacityChanged = false;
+                    let oldFreeSlots = 0;
+                    let newFreeSlots = 0;
+
+                    if (capacityInput) {
+                        const viewCapacity = row.querySelector('td:nth-child(6) .capacity-box .topic-field--view');
+                        const oldCapacity = parseInt(viewCapacity ? viewCapacity.textContent.trim() : '0') || 0;
+                        const newCapacity = parseInt(capacityInput.value) || 0;
+                        if (oldCapacity !== newCapacity) capacityChanged = true;
+
+                        if (viewCapacity) viewCapacity.textContent = capacityInput.value;
+
+                        const capacityMeta = row.querySelector('td:nth-child(6) .capacity-box .capacity-meta');
+                        if (capacityMeta) {
+                            const oldMetaText = capacityMeta.textContent.trim();
+                            const oldMatch = oldMetaText.match(/Свободно:\s*(\d+)/);
+                            oldFreeSlots = oldMatch ? parseInt(oldMatch[1]) : 0;
+
+                            const approvedCount = row.querySelectorAll('.student-pill--approved').length;
+                            newFreeSlots = Math.max(newCapacity - approvedCount, 0);
+                            capacityMeta.textContent = 'Свободно: ' + newFreeSlots;
+                        }
+                    }
+
+                    if (capacityChanged && ((oldFreeSlots === 0 && newFreeSlots > 0) || (oldFreeSlots > 0 && newFreeSlots === 0))) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    row.classList.remove('is-editing');
+                }
+
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            })
+            .catch(error => {
+                console.error('Ошибка при сохранении:', error);
+                let errorMessage = 'Ошибка при сохранении: ' + error.message;
+                if (error.response) {
+                    error.response.json().then(data => {
+                        if (data.errors) errorMessage = 'Ошибки: ' + data.errors.join(', ');
+                        alert(errorMessage);
+                    }).catch(() => alert(errorMessage));
+                } else {
+                    alert(errorMessage);
+                }
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            });
+        });
+    });
+})();
+
+document.addEventListener('DOMContentLoaded', function() {
+    const detailsElements = document.querySelectorAll('.topic-details');
+    detailsElements.forEach(function(details) {
+        const summary = details.querySelector('summary');
+        const description = details.querySelector('.topic-description');
+        if (!summary || !description) return;
+        let isAnimating = false;
+        summary.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (isAnimating) return;
+            const isOpen = details.hasAttribute('open');
+            if (isOpen) {
+                isAnimating = true;
+                collapseDescription(description, function() {
+                    details.removeAttribute('open');
+                    isAnimating = false;
+                });
+            } else {
+                isAnimating = true;
+                details.setAttribute('open', '');
+                expandDescription(description, function() { isAnimating = false; });
+            }
+        });
+
+        if (details.hasAttribute('open')) {
+            const targetHeight = description.scrollHeight;
+            description.style.height = targetHeight + 'px';
+            description.style.opacity = '1';
+            description.style.visibility = 'visible';
+            description.style.padding = '12px 0 12px 20px';
+            description.style.marginTop = '8px';
+            setTimeout(function() { description.style.height = 'auto'; }, 100);
+        } else {
+            description.style.height = '0';
+            description.style.opacity = '0';
+            description.style.visibility = 'hidden';
+            description.style.padding = '0 0 0 20px';
+            description.style.marginTop = '0';
+        }
+    });
+
+    function expandDescription(element, callback) {
+        if (element._animationTimeout) clearTimeout(element._animationTimeout);
+        element.classList.remove('expanding', 'collapsing');
+
+        const startHeight = 0;
+        element.style.height = 'auto';
+        element.style.visibility = 'hidden';
+        element.style.display = 'block';
+        const targetHeight = element.scrollHeight;
+
+        element.style.visibility = 'visible';
+        element.style.display = '';
+        element.style.height = startHeight + 'px';
+        element.style.opacity = '0';
+        element.style.visibility = 'hidden';
+        element.style.padding = '0 0 0 20px';
+        element.style.marginTop = '0';
+
+        element.offsetHeight;
+        element.classList.add('expanding');
+
+        requestAnimationFrame(function() {
+            element.style.height = targetHeight + 'px';
+            element.style.opacity = '1';
+            element.style.visibility = 'visible';
+        });
+
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = 'auto';
+            element.classList.remove('expanding');
+            if (callback) callback();
+        }, 600);
+    }
+
+    function collapseDescription(element, callback) {
+        if (element._animationTimeout) clearTimeout(element._animationTimeout);
+        element.classList.remove('expanding', 'collapsing');
+
+        if (element.style.height === 'auto' || !element.style.height) {
+            element.style.height = element.scrollHeight + 'px';
+        }
+        const startHeight = parseFloat(element.style.height) || element.scrollHeight;
+        element.style.height = startHeight + 'px';
+
+        element.offsetHeight;
+        element.classList.add('collapsing');
+
+        requestAnimationFrame(function() {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+            element.style.visibility = 'hidden';
+            element.style.padding = '0 0 0 20px';
+            element.style.marginTop = '0';
+        });
+
+        element._animationTimeout = setTimeout(function() {
+            element.style.height = '';
+            element.style.opacity = '';
+            element.style.visibility = '';
+            element.style.padding = '';
+            element.style.marginTop = '';
+            element.classList.remove('collapsing');
+            if (callback) callback();
+        }, 500);
+    }
+});
+</script>
+{% endblock %}

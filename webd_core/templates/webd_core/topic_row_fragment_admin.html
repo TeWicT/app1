@@ -1,0 +1,109 @@
+<tr class="topic-row {% if not row.topic.is_active %}topic-row_inactive{% endif %}" data-topic="{{ row.topic.id }}">
+    <td>{{ row.index }}</td>
+    <td>
+        <div class="topic-field--view">
+            {{ row.topic.title }}
+        </div>
+        <div class="topic-field--edit">
+            <input form="topic-form-{{ row.topic.id }}" type="text" name="title"
+                   class="table-input" value="{{ row.topic.title }}" required/>
+        </div>
+    </td>
+    <td>
+        <div class="topic-field--view">
+            <details class="topic-details">
+                <summary>Описание</summary>
+                <div class="topic-description">
+                    {{ row.topic.description|default:"Описание не задано" }}
+                </div>
+            </details>
+        </div>
+        <div class="topic-field--edit">
+            <textarea form="topic-form-{{ row.topic.id }}" name="description"
+                      class="table-textarea">{{ row.topic.description }}</textarea>
+        </div>
+    </td>
+    <td>
+        <div class="topic-field--view">
+            {{ row.topic.direction|default:"—" }}
+        </div>
+        <div class="topic-field--edit">
+            <input form="topic-form-{{ row.topic.id }}" type="text" name="direction"
+                   class="table-input" value="{{ row.topic.direction }}"/>
+        </div>
+    </td>
+    <td>
+        <div class="topic-field--view">
+            {{ row.topic.course }}
+        </div>
+        <div class="topic-field--edit">
+            <input form="topic-form-{{ row.topic.id }}" type="number" min="1" max="6"
+                   name="course" class="table-input table-input__number"
+                   value="{{ row.topic.course }}" required/>
+        </div>
+    </td>
+    <td>
+        <div class="capacity-box">
+            <div class="topic-field--view">
+                {{ row.topic.capacity }}
+            </div>
+            <div class="topic-field--edit">
+                <input form="topic-form-{{ row.topic.id }}" type="number" min="1"
+                       name="capacity" class="table-input table-input__number"
+                       value="{{ row.topic.capacity }}" required/>
+            </div>
+            <div class="capacity-meta">
+                Свободно: {{ row.free_slots }}
+            </div>
+        </div>
+    </td>
+    <td>
+        <div class="topic-students">
+            {% if row.approved %}
+                <div class="students-list students-list--approved">
+                    {% for req in row.approved %}
+                        <div class="student-pill student-pill--approved">
+                            {{ req.enrollment.student.full_name }}
+                            {% if req.enrollment.group %}
+                                ({{ req.enrollment.group.name }})
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if row.pending %}
+                <div class="students-list students-list--pending">
+                    {% for req in row.pending %}
+                        <div class="student-pill">
+                            {{ req.enrollment.student.full_name }}
+                            {% if req.enrollment.group %}
+                                ({{ req.enrollment.group.name }})
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if not row.approved and not row.pending %}
+                <span class="muted">В ожидании студента(ов)</span>
+            {% endif %}
+        </div>
+    </td>
+    <td class="actions-cell">
+        <button type="button" class="topic-edit-toggle" data-topic="{{ row.topic.id }}" title="Редактировать">
+            &#9998;
+        </button>
+        <form method="post" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_topic"/>
+            <input type="hidden" name="topic_id" value="{{ row.topic.id }}"/>
+            <button type="submit" class="topic-delete-btn" title="Удалить">&#10005;</button>
+        </form>
+        <form id="topic-form-{{ row.topic.id }}" method="post" action="{% url 'admin_panel' %}" class="hidden-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_topic"/>
+            <input type="hidden" name="topic_id" value="{{ row.topic.id }}"/>
+        </form>
+        <button type="submit" form="topic-form-{{ row.topic.id }}" class="inp save-button">Сохранить</button>
+    </td>
+</tr>
+

@@ -194,6 +194,29 @@ class TeacherProfile(models.Model):
         return self.full_name
 
 
+class AdminProfile(models.Model):
+    """
+    Профиль администратора системы (может быть как преподаватель, так и сотрудник).
+    Наличие записи AdminProfile даёт доступ к странице "Админ-панель".
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='admin_profile',
+        verbose_name="Пользователь",
+    )
+    full_name = models.CharField("ФИО администратора", max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Профиль администратора"
+        verbose_name_plural = "Профили администраторов"
+        ordering = ['full_name']
+
+    def __str__(self):
+        return self.full_name or self.user.username
+
+
 class Topic(models.Model):
     teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='topics', verbose_name="Преподаватель")
     title = models.CharField("Название темы", max_length=255)

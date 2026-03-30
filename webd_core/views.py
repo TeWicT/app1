@@ -18,6 +18,8 @@ from .models import (
     TopicRequest,
     DiscussionThread,
     DiscussionMessage,
+    TeacherProfile,
+    AdminProfile,
     DEPARTMENTS,
     ADVISER_POSITION_CHOICES,
     COURSE_CHOICES,
@@ -622,6 +624,179 @@ def teacher_topics_view(request):
     }
     return render(request, 'webd_core/page_teacher_topics.html', context)
 
+
+@login_required(login_url='page_webd')
+def admin_panel_view(request):
+    """
+    Админ-панель: администратор может управлять темами всех преподавателей.
+    Администратор определяется наличием профиля AdminProfile.
+    """
+    admin_profile = getattr(request, 'admin_profile', None)
+    if not admin_profile:
+        messages.error(request, "Страница доступна только администраторам.")
+        return redirect('page_webd')
+
+    teachers = TeacherProfile.objects.all().order_by('full_name')
+
+    # Подгружаем заявки студентов, чтобы показать "студентов" и свободные места,
+    # как на странице преподавателя.
+    topics_qs = Topic.objects.select_related('teacher').prefetch_related(
+        Prefetch(
+            'requests',
+            queryset=TopicRequest.objects.select_related(
+                'enrollment__student',
+                'enrollment__group'
+            ).order_by('-created_at')
+        )
+    ).order_by('created_at')
+
+    topics_by_teacher = defaultdict(list)
+    for topic in topics_qs:
+        topics_by_teacher[topic.teacher_id].append(topic)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create_batch':
+            teacher_id = request.POST.get('teacher_id')
+            teacher = TeacherProfile.objects.filter(id=teacher_id).first()
+            if not teacher:
+                messages.error(request, "Преподаватель не найден.")
+                return redirect('admin_panel')
+
+            titles = request.POST.getlist('title[]')
+            descriptions = request.POST.getlist('description[]')
+            directions = request.POST.getlist('direction[]')
+            courses = request.POST.getlist('course[]')
+            capacities = request.POST.getlist('capacity[]')
+
+            def _teacher_department():
+                if teacher.department:
+                    return teacher.department
+                return DEPARTMENTS[0]
+
+            created = 0
+            errors = []
+            for idx, title in enumerate(titles):
+                title = (title or '').strip()
+                if not title:
+                    continue
+                description = (descriptions[idx] if idx < len(descriptions) else '').strip()
+                direction = (directions[idx] if idx < len(directions) else '').strip()
+                course_val = _parse_course(courses[idx] if idx < len(courses) else None)
+                capacity_val = _parse_course(capacities[idx] if idx < len(capacities) else None)
+                if course_val not in [choice[0] for choice in COURSE_CHOICES]:
+                    errors.append(f"Строка {idx+1}: некорректный курс.")
+                    continue
+                if not capacity_val or capacity_val < 1:
+                    errors.append(f"Строка {idx+1}: количество студентов должно быть положительным.")
+                    continue
+
+                Topic.objects.create(
+                    teacher=teacher,
+                    title=title,
+                    description=description,
+                    direction=direction,
+                    department=_teacher_department(),
+                    course=course_val,
+                    capacity=capacity_val,
+                    is_active=True,
+                )
+                created += 1
+
+            if errors:
+                for err in errors:
+                    messages.error(request, err)
+            if created:
+                messages.success(request, f"Добавлено тем: {created}")
+
+            if created or errors:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({'success': created > 0, 'created': created, 'errors': errors})
+                return redirect('admin_panel')
+
+        if action == 'update_topic':
+            topic_id = request.POST.get('topic_id')
+            topic = Topic.objects.select_related('teacher').filter(id=topic_id).first()
+            if not topic:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({'success': False, 'errors': ["Тема не найдена."]}, status=404)
+                messages.error(request, "Тема не найдена.")
+                return redirect('admin_panel')
+            # Используем существующую логику обновления темы для преподавателя
+            result, error_messages = _handle_topic_update(request, topic.teacher)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                if result:
+                    return JsonResponse({'success': True})
+                return JsonResponse({'success': False, 'errors': error_messages or ['Ошибка обновления']}, status=400)
+            return redirect('admin_panel')
+
+        if action == 'delete_topic':
+            topic_id = request.POST.get('topic_id')
+            topic = Topic.objects.select_related('teacher').filter(id=topic_id).first()
+            if not topic:
+                messages.error(request, "Тема не найдена.")
+                return redirect('admin_panel')
+            _handle_topic_delete(request, topic.teacher, topic_id)
+            return redirect('admin_panel')
+
+    # Собираем панели по преподавателям в том же формате, что "Предложить тему"
+    teacher_panels = []
+    for teacher in teachers:
+        teacher_topics = topics_by_teacher.get(teacher.id, [])
+
+        free_topics = []
+        course_topics = {}
+        for topic in teacher_topics:
+            requests = list(topic.requests.all())
+            approved = [r for r in requests if r.status == TopicRequest.STATUS_APPROVED]
+            pending = [r for r in requests if r.status == TopicRequest.STATUS_PENDING]
+            free_slots = max(topic.capacity - len(approved), 0)
+            row = {
+                'topic': topic,
+                'approved': approved,
+                'pending': pending,
+                'free_slots': free_slots,
+            }
+            if free_slots > 0:
+                free_topics.append(row)
+            else:
+                if approved:
+                    first_student_course = _parse_course(approved[0].enrollment.courses)
+                    if first_student_course:
+                        course_topics.setdefault(first_student_course, []).append(row)
+                    else:
+                        free_topics.append(row)
+                else:
+                    free_topics.append(row)
+
+        # Индексация как у преподавателя: одна сквозная нумерация внутри преподавателя
+        idx_counter = 1
+        for r in free_topics:
+            r['index'] = idx_counter
+            idx_counter += 1
+        for course in sorted(course_topics.keys(), reverse=True):
+            for r in course_topics[course]:
+                r['index'] = idx_counter
+                idx_counter += 1
+
+        teacher_panels.append({
+            'teacher': teacher,
+            'free_topics': free_topics,
+            'course_topics': course_topics,
+            'sorted_courses': sorted(course_topics.keys(), reverse=True) if course_topics else [],
+        })
+
+    context = {
+        'teachers': teachers,
+        'teacher_panels': teacher_panels,
+        'course_choices': COURSE_CHOICES,
+        'page_admin_panel': True,
+    }
+    return render(request, 'webd_core/page_admin_panel.html', context)
 
 @login_required(login_url='page_webd')
 def student_topics_view(request):

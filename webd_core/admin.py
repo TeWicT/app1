@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Year, Group, Student, Enrollment, Document, TeacherProfile, Topic, TopicRequest
+from .models import Year, Group, Student, Enrollment, Document, TeacherProfile, AdminProfile, Topic, TopicRequest
 
 class EnrollmentInline(admin.TabularInline):
     model = Enrollment
@@ -43,6 +43,14 @@ class DocumentAdmin(admin.ModelAdmin):
 class TeacherProfileAdmin(admin.ModelAdmin):
     list_display = ("id", "full_name", "department", "adviser_position", "user", "created_at")
     list_filter = ("department", "adviser_position")
+    search_fields = ("full_name", "user__username")
+    raw_id_fields = ("user",)
+    ordering = ("full_name",)
+
+
+@admin.register(AdminProfile)
+class AdminProfileAdmin(admin.ModelAdmin):
+    list_display = ("id", "full_name", "user", "created_at")
     search_fields = ("full_name", "user__username")
     raw_id_fields = ("user",)
     ordering = ("full_name",)

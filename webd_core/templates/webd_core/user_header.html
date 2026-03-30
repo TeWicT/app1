@@ -4,6 +4,11 @@
         презентаций</a>
     {% if request.user.is_authenticated %}
     |
+    {% if request.admin_profile %}
+    <a href="{% url 'admin_panel' %}" {% if page_admin_panel %}class="user_no_file"{% endif %}>
+        Админ-панель
+    </a> |
+    {% endif %}
     {% if request.teacher_profile %}
     <a href="{% url 'teacher_topics' %}" {% if page_teacher_topics %}class="user_no_file"{% endif %}>
         Предложить тему{% if request.pending_request_count %} ({{ request.pending_request_count }}){% endif %}
@@ -11,7 +16,7 @@
     <a href="{% url 'teacher_discussions' %}" {% if page_teacher_discussions %}class="user_no_file"{% endif %}>
         Обсуждение работ
     </a> |
-    {% else %}
+    {% elif request.student_profile %}
     <a href="{% url 'student_topics' %}" {% if page_topic_select %}class="user_no_file"{% endif %}>
         Выбрать тему
         {% if request.topic_notifications.decided %}
@@ -21,9 +26,9 @@
     <a href="{% url 'student_discussion' %}">
         Обсуждение работы
     </a> |
-    <a href="{% url 'page_identity' foundyear=foundyear %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
+    <a href="{% url 'page_identity' foundyear=request.foundyear %}" id="identity_link" {% if page_identity %}class="user_no_file" {% endif %}>Регистрация
         работы</a> |
-    <a href="{% url "page_upload" foundyear=foundyear %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
+    <a href="{% url "page_upload" foundyear=request.foundyear %}" id="upload_link" {% if page_upload %}class="user_no_file" {% endif %}>Загрузка файлов</a> |
     {% endif %}
     <a href="/login/exit">Выход</a>
     {% else %}

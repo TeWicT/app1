@@ -1,6 +1,6 @@
 # webd_core/middleware.py
 from django.db import connection
-from .models import Student, TeacherProfile, TopicRequest, Year
+from .models import Student, TeacherProfile, AdminProfile, TopicRequest, Year
 
 
 class FoundYearMiddleware:
@@ -15,12 +15,14 @@ class FoundYearMiddleware:
         request.foundyear = request.session.get('foundyear', default_year)
         request.student_profile = None
         request.teacher_profile = None
+        request.admin_profile = None
 
         user = getattr(request, 'user', None)
         if user and user.is_authenticated:
             request.student_profile = Student.objects.filter(login=user.username).first()
             teacher_profile = getattr(user, 'teacher_profile', None)
             request.teacher_profile = teacher_profile
+            request.admin_profile = AdminProfile.objects.filter(user=user).first()
             request.pending_request_count = 0
             request.topic_notifications = {'pending': 0, 'decided': 0}
 

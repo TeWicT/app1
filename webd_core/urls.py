@@ -15,6 +15,7 @@ urlpatterns = [
     path('discussion/', views.student_discussion, name='student_discussion'),
     path('discussions/', views.teacher_discussions, name='teacher_discussions'),
     path('discussion/<int:thread_id>/', views.discussion_view, name='discussion_view'),
+    path('admin-panel/', views.admin_panel_view, name='admin_panel'),
 
 
 ]
