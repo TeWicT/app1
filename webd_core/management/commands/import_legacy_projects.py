@@ -37,13 +37,21 @@ def _parse_index_clj(text: str) -> dict:
         "adviser-position",
         "adviser-status",
     ]
-    # Разбираем строковые значения, поддерживая экранированные кавычки внутри
+    # Разбираем строковые значения, поддерживая экранированные кавычки внутри,
+    # а также учитываем legacy-значение nil (например: :department nil).
     # Пример: :title "Развитие системы \"Курс\""
     for key in top_level_keys:
+        # 1) quoted string: :key "value"
         match = re.search(rf":{re.escape(key)}\s+\"((?:\\.|[^\"])*)\"", text)
         if match:
             raw = match.group(1)
             data[key] = _unescape_legacy(raw).strip()
+            continue
+        # 2) nil: :key nil
+        # NOTE: avoid f-string with literal "}" (it breaks parsing).
+        match_nil = re.search(r":" + re.escape(key) + r"\s+nil(\s|,|\})", text)
+        if match_nil:
+            data[key] = ""
 
     files_match = re.search(r":files\s*\{(.*?)\}\s*,\s*:adviser-status", text, flags=re.S)
     if not files_match:
@@ -288,8 +296,12 @@ class Command(BaseCommand):
                                     enrollment_obj.courses = str(course_value)
                                     changed = True
                                 update_fields = []
+                                # Для кафедры важно уметь "обнулить" значение, если в index.clj стоит nil/пусто.
+                                # Поэтому department обновляем всегда, если отличается.
+                                if getattr(enrollment_obj, "department") != department:
+                                    enrollment_obj.department = department
+                                    update_fields.append("department")
                                 for field_name, value in (
-                                    ("department", department),
                                     ("adviser_name", adviser_name),
                                     ("title", title),
                                     ("adviser_rank", adviser_rank),

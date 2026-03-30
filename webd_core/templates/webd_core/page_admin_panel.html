@@ -91,6 +91,26 @@
         .topic-row.is-editing .topic-field--edit { display: block; }
         .topic-row.is-editing .topic-field--view { display: none; }
 
+        /* Визуальная маркировка скрытых тем */
+        .topic-row_inactive {
+            opacity: 0.65;
+            background: #fff3cd;
+        }
+        .topic-visibility-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            font-size: 11pt;
+            border-radius: 999px;
+            border: 1px solid rgba(0,0,0,0.15);
+            vertical-align: middle;
+        }
+        .topic-visibility-badge--hidden {
+            background: #f8d7da;
+            border-color: #f5c2c7;
+            color: #842029;
+        }
+
         .topic-field--edit { width: 100%; display: flex; align-items: center; }
         .topic-field--edit .table-input,
         .topic-field--edit .table-textarea,

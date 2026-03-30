@@ -3,6 +3,9 @@
     <td>
         <div class="topic-field--view">
             {{ row.topic.title }}
+            {% if not row.topic.is_active %}
+                <span class="topic-visibility-badge topic-visibility-badge--hidden">Скрыта</span>
+            {% endif %}
         </div>
         <div class="topic-field--edit">
             <input form="topic-form-{{ row.topic.id }}" type="text" name="title"
@@ -92,6 +95,20 @@
         <button type="button" class="topic-edit-toggle" data-topic="{{ row.topic.id }}" title="Редактировать">
             &#9998;
         </button>
+        <form method="post" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="toggle_active"/>
+            <input type="hidden" name="topic_id" value="{{ row.topic.id }}"/>
+            {% if row.topic.is_active %}
+                {% if row.approved or row.pending %}
+                    <button type="button" class="topic-edit-toggle" title="Нельзя скрыть: уже есть заявки/принятые студенты" disabled style="opacity:0.4; cursor:not-allowed;">&#128065;&#xFE0E;</button>
+                {% else %}
+                    <button type="submit" class="topic-edit-toggle" title="Скрыть от студентов">&#128065;&#xFE0E;</button>
+                {% endif %}
+            {% else %}
+                <button type="submit" class="topic-edit-toggle" title="Показать студентам">&#128065;&#xFE0E;</button>
+            {% endif %}
+        </form>
         <form method="post" style="display:inline;">
             {% csrf_token %}
             <input type="hidden" name="action" value="delete_topic"/>

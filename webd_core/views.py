@@ -110,9 +110,10 @@ def _build_row(enroll, doc_types):
             'in_time': True,
             'link': doc.file.url if doc else '',
         })
+    department = (enroll.department or '').strip() or 'Не указана'
     return {
         'year': enroll.year.year,
-        'department': enroll.department,
+        'department': department,
         'group': enroll.group.name,
         'title': enroll.title,
         'name': enroll.student.full_name,
@@ -166,7 +167,7 @@ def _write_legacy_index_for_enrollment(enrollment):
         f":title \"{(enrollment.title or '').replace(chr(34), chr(39))}\", "
         f":adviser-rank \"{(enrollment.adviser_rank or '').replace(chr(34), chr(39))}\", "
         f":adviser-position \"{(enrollment.adviser_position or '').replace(chr(34), chr(39))}\", "
-        f":files {{{files_body}}}, "
+        f":files {{{files_body}}} "
         f":adviser-status \"{(enrollment.adviser_status or '').replace(chr(34), chr(39))}\""
         "}"
     )
@@ -192,7 +193,8 @@ def _collect_grouped_rows(qs):
         row = _build_row(enroll, doc_types)
 
         year_entry = grouped[enroll.year.year]
-        dept_entry = year_entry.setdefault(enroll.department, {})
+        dept_key = (enroll.department or '').strip() or 'Не указана'
+        dept_entry = year_entry.setdefault(dept_key, {})
         group_entry = dept_entry.setdefault(enroll.group.name, {
             'rows': [],
             'doc_types': doc_types,
@@ -334,6 +336,9 @@ def page_identity(request,foundyear):
         form = StudentForm(request.POST, instance=enrollment)
         if form.is_valid():
             form.save()
+            # По требованию: если студент меняет данные в "Регистрация работы",
+            # соответствующий legacy index.clj должен обновляться.
+            _write_legacy_index_for_enrollment(enrollment)
             # переход на GET, чтобы обновить student и убрать повторы POST
             return redirect('page_identity', foundyear=year.year)
     else:
@@ -604,6 +609,15 @@ def teacher_topics_view(request):
             topic_id = request.POST.get('topic_id')
             _handle_topic_delete(request, teacher, topic_id)
             return redirect('teacher_topics')
+        elif action == 'toggle_active':
+            topic_id = request.POST.get('topic_id')
+            result, error_messages = _handle_topic_toggle_active(request, teacher, topic_id)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                if result:
+                    return JsonResponse({'success': True})
+                return JsonResponse({'success': False, 'errors': error_messages or ['Ошибка']}, status=400)
+            return redirect('teacher_topics')
         elif action == 'decision':
             request_id = request.POST.get('request_id')
             decision = request.POST.get('decision')
@@ -742,6 +756,22 @@ def admin_panel_view(request):
                 return redirect('admin_panel')
             _handle_topic_delete(request, topic.teacher, topic_id)
             return redirect('admin_panel')
+        if action == 'toggle_active':
+            topic_id = request.POST.get('topic_id')
+            topic = Topic.objects.select_related('teacher').filter(id=topic_id).first()
+            if not topic:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({'success': False, 'errors': ["Тема не найдена."]}, status=404)
+                messages.error(request, "Тема не найдена.")
+                return redirect('admin_panel')
+            result, error_messages = _handle_topic_toggle_active(request, topic.teacher, topic_id)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                if result:
+                    return JsonResponse({'success': True})
+                return JsonResponse({'success': False, 'errors': error_messages or ['Ошибка']}, status=400)
+            return redirect('admin_panel')
 
     # Собираем панели по преподавателям в том же формате, что "Предложить тему"
     teacher_panels = []
@@ -813,13 +843,13 @@ def student_topics_view(request):
 
     dept_param = request.GET.get('department')
     if dept_param is None:
-        selected_department = enrollment.department or ''
+        selected_department = (enrollment.department or '').strip() or 'Не указана'
     else:
-        selected_department = dept_param
+        selected_department = (dept_param or '').strip() or 'Не указана'
     student_course = _parse_course(enrollment.courses)
 
     if request.method == 'POST':
-        selected_department = request.POST.get('department', selected_department)
+        selected_department = (request.POST.get('department', selected_department) or '').strip() or 'Не указана'
         topic_id = request.POST.get('topic_id')
         if topic_id:
             _create_topic_request(enrollment, topic_id, request)
@@ -832,7 +862,10 @@ def student_topics_view(request):
     if student_course:
         topics_qs = topics_qs.filter(course=student_course)
     if selected_department:
-        topics_qs = topics_qs.filter(department=selected_department)
+        if selected_department == 'Не указана':
+            topics_qs = topics_qs.filter(Q(teacher__department__isnull=True) | Q(teacher__department=''))
+        else:
+            topics_qs = topics_qs.filter(department=selected_department)
     topics_qs = topics_qs.select_related('teacher').prefetch_related(
         Prefetch(
             'requests',
@@ -847,7 +880,9 @@ def student_topics_view(request):
     approved_request = next((req for req in requests_qs if req.status == TopicRequest.STATUS_APPROVED), None)
     student_has_pending = any(req.status == TopicRequest.STATUS_PENDING for req in requests_qs)
 
-    departments = [{'value': d, 'selected': d == selected_department} for d in DEPARTMENTS]
+    # Добавляем опцию "Не указана" для тем преподавателей без кафедры
+    dept_values = list(DEPARTMENTS) + ['Не указана']
+    departments = [{'value': d, 'selected': d == selected_department} for d in dept_values]
 
     topic_entries = []
     for idx, topic in enumerate(topics_qs, start=1):
@@ -868,7 +903,9 @@ def student_topics_view(request):
     topic_groups = []
     dept_map = {}
     for entry in topic_entries:
-        dept = entry['topic'].department or 'Не указано'
+        # Для страницы "Выбрать тему" считаем кафедру по профилю преподавателя.
+        # Если кафедра не указана — показываем "Не указана" (и туда же группируем).
+        dept = (entry['topic'].teacher.department or '').strip() or 'Не указана'
         direction = entry['topic'].direction or 'Не указано'
         dept_map.setdefault(dept, {}).setdefault(direction, []).append(entry)
     
@@ -976,10 +1013,14 @@ def _handle_topic_update(request, teacher):
         enrollment = tr.enrollment
         # Синхронизируем ключевые поля, как при утверждении заявки
         enrollment.title = topic.title
-        enrollment.department = topic.department
+        # Если у преподавателя не указана кафедра, в Enrollment храним пустое значение,
+        # а в поиске/просмотре отображаем как "Не указана".
+        enrollment.department = (topic.teacher.department or '').strip() or ''
         enrollment.adviser_name = topic.teacher.full_name
         enrollment.adviser_position = topic.teacher.adviser_position
         enrollment.save(update_fields=['title', 'department', 'adviser_name', 'adviser_position'])
+        # По требованию: index.clj должен обновляться при любом изменении темы.
+        _write_legacy_index_for_enrollment(enrollment)
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         messages.success(request, "Данные темы обновлены.")
     return True, []
@@ -1002,9 +1043,13 @@ def _approve_topic_request(topic_request, comment, request):
         topic = topic_request.topic
         enrollment.title = topic.title
         enrollment.adviser_name = topic.teacher.full_name
-        enrollment.department = topic.department
+        # Если у преподавателя не указана кафедра, в Enrollment храним пустое значение,
+        # а в поиске/просмотре отображаем как "Не указана".
+        enrollment.department = (topic.teacher.department or '').strip() or ''
         enrollment.adviser_position = topic.teacher.adviser_position
         enrollment.save(update_fields=['title', 'adviser_name', 'department', 'adviser_position'])
+        # По требованию: index.clj должен обновляться при любом изменении темы.
+        _write_legacy_index_for_enrollment(enrollment)
 
         TopicRequest.objects.filter(enrollment=enrollment).exclude(id=topic_request.id).update(
             status=TopicRequest.STATUS_REJECTED,
@@ -1028,20 +1073,60 @@ def _handle_topic_delete(request, teacher, topic_id):
         return False
 
     with transaction.atomic():
+        topic_requests = TopicRequest.objects.filter(topic=topic).select_related('enrollment')
+        enrollment_ids = list(topic_requests.values_list('enrollment_id', flat=True))
+
         TopicRequest.objects.filter(topic=topic).update(
             status=TopicRequest.STATUS_REJECTED,
             comment='Тема удалена преподавателем',
             decided_at=timezone.now()
         )
         TopicRequest.objects.filter(topic=topic).delete()
-        Enrollment.objects.filter(
-            title=topic.title,
-            adviser_name=topic.teacher.full_name,
-            department=topic.department
-        ).update(title='', adviser_name='', department='', adviser_position='')
+
+        # Очищаем именно записи обучения, связанные с этой темой.
+        if enrollment_ids:
+            Enrollment.objects.filter(id__in=enrollment_ids).update(
+                title='',
+                adviser_name='',
+                adviser_position='',
+                department='',
+                adviser_rank='',
+                adviser_status='',
+            )
+            # Перезаписываем index.clj для impacted enrollment (по требованию).
+            for enroll_id in enrollment_ids:
+                _write_legacy_index_for_enrollment(Enrollment.objects.get(id=enroll_id))
+
         topic.delete()
         messages.success(request, "Тема удалена.")
     return True
+
+
+def _handle_topic_toggle_active(request, teacher, topic_id):
+    """
+    Переключает видимость темы для студентов (Topic.is_active).
+    Доступ: преподаватель-владелец темы (или админ, который вызывает это с teacher=topic.teacher).
+    """
+    topic = Topic.objects.filter(id=topic_id, teacher=teacher).first()
+    if not topic:
+        error_msg = "Тема не найдена."
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return False, [error_msg]
+        messages.error(request, error_msg)
+        return False, [error_msg]
+
+    # Нельзя скрывать тему, если по ней уже есть заявки или принятые студенты.
+    # (Показать обратно — можно.)
+    if topic.is_active and TopicRequest.objects.filter(topic=topic).exists():
+        error_msg = "Нельзя скрыть тему: по ней уже есть заявки от студентов."
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return False, [error_msg]
+        messages.error(request, error_msg)
+        return False, [error_msg]
+
+    topic.is_active = not topic.is_active
+    topic.save(update_fields=['is_active', 'updated_at'])
+    return True, []
 def _reject_topic_request(topic_request, comment):
     topic_request.status = TopicRequest.STATUS_REJECTED
     topic_request.comment = comment
