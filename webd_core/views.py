@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from django.db import transaction
 from django.db.models import Q, Prefetch, Count
 from django.utils import timezone
+from datetime import datetime, timezone as dt_timezone
 from django.urls import reverse
 from .models import (
     Student,
@@ -30,6 +31,7 @@ from django.contrib import messages
 from collections import defaultdict
 from django.template.loader import render_to_string
 from .utils.pdf import html_to_pdf
+import re
 
 GROUP_METHOD_DEFAULT = 'default'
 SORT_METHOD_DEFAULT = 'by-student-name'
@@ -102,13 +104,128 @@ def _apply_common_filters(post_data):
 
 def _build_row(enroll, doc_types):
     docs = {d.doc_type: d for d in enroll.documents.all()}
+    # Сопоставление типа документа -> ключ в legacy index.clj (:files { ... }).
+    file_key_map = {
+        Document.INTERIM_REPORT: "int-report",
+        Document.INTERIM_PRESENTATION: "int-slides",
+        Document.FINAL_REPORT: "fin-report",
+        Document.FINAL_PRESENTATION: "fin-slides",
+        Document.PRACTICE_NIR_REPORT: "fin-preport",
+        Document.THESIS_TEXT: "fin-report",
+        Document.THESIS_PRESENTATION: "fin-slides",
+        Document.PLAGIARISM_CHECK: "fin-antiplagiat",
+        Document.ADVISOR_REVIEW: "fin-sup-review",
+        Document.REVIEW: "fin-review",
+    }
+
+    # Читаем creation-time из index.clj.
+    # Основной путь: базовую папку берём из пути файла в БД:
+    # .../{year}/{courses}/{group}/{login}/{interim|final}/.../file.pdf  -> база = .../{login}/
+    # Fallback (на случай, если storage не даёт .path или файл отсутствует локально):
+    # {year}/{courses}/{group}/{login}/index.clj
+    creation_times = {}
+    index_text = ""
+    try:
+        any_doc = next(iter(docs.values()), None)
+        if any_doc and getattr(any_doc, "file", None):
+            index_path = None
+            try:
+                # base_dir = .../{login}/
+                base_dir = Path(any_doc.file.path).parent.parent.parent
+                index_path = base_dir / "index.clj"
+            except Exception:
+                index_path = None
+
+            if not index_path:
+                year_value = enroll.year.year
+                course_value = (getattr(enroll, "courses", None) or "").strip() or "0"
+                group_value = enroll.group.name
+                login_value = enroll.student.login
+                index_path = (
+                    Path(settings.MEDIA_ROOT)
+                    / "groups"
+                    / "projects"
+                    / str(year_value)
+                    / str(course_value)
+                    / group_value
+                    / login_value
+                    / "index.clj"
+                )
+
+            if index_path.exists():
+                text = index_path.read_text(encoding="utf-8", errors="ignore")
+                index_text = text
+                # В legacy index.clj таймстемпы выглядят так:
+                # :int-report {:creation-time "2026-03-29T14:35:49Z"}
+                # Формат может отличаться переносами/пробелами и наличием доп.полей внутри {}.
+                for legacy_key, ts in re.findall(
+                    r':([a-z0-9\-]+)\s*\{\s*[^}]*?:creation-time\s*"([^"]+)"',
+                    text,
+                    flags=re.IGNORECASE | re.DOTALL,
+                ):
+                    if not ts.endswith("Z"):
+                        continue
+                    try:
+                        # В legacy встречаются оба формата:
+                        # - 2026-03-29T14:35:49Z
+                        # - 2024-12-23T19:31:19.449976Z
+                        try:
+                            dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt_timezone.utc)
+                        except ValueError:
+                            dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt_timezone.utc)
+                        creation_times[legacy_key] = dt
+                    except ValueError:
+                        continue
+    except Exception:
+        # Не ломаем страницу, даже если index.clj отсутствует/битый/нет прав.
+        creation_times = {}
+
     sfiles = []
     for code, _ in doc_types:
         doc = docs.get(code)
+        # Дедлайны для просрочки считаем от календарного года начала работы (enroll.year.year).
+        # Для "Пр. отчет" и "Пр. ЭП" (interim_*) дедлайн: 01.01 следующего года.
+        # Для остальных файлов дедлайн: 01.06 следующего года.
+        # Сравниваем в UTC (и index.clj хранит время в UTC с суффиксом Z)
+        tz = dt_timezone.utc
+        next_year = int(enroll.year.year) + 1
+        if code in {Document.INTERIM_REPORT, Document.INTERIM_PRESENTATION}:
+            deadline = datetime(next_year, 1, 1, 0, 0, 0, tzinfo=tz)
+        else:
+            deadline = datetime(next_year, 6, 1, 0, 0, 0, tzinfo=tz)
+        in_time = True
+        uploaded_at = None
+        if doc:
+            legacy_key = file_key_map.get(code)
+            uploaded_at = creation_times.get(legacy_key)
+            # Точечный fallback: если общий regex не вытащил нужный ключ, попробуем найти его отдельно.
+            if not uploaded_at and legacy_key and index_text:
+                m = re.search(
+                    rf":{re.escape(legacy_key)}\s*\{{\s*[^}}]*?:creation-time\s*\"([^\"]+)\"",
+                    index_text,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if m:
+                    ts = m.group(1)
+                    if ts.endswith("Z"):
+                        try:
+                            try:
+                                uploaded_at = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt_timezone.utc)
+                            except ValueError:
+                                uploaded_at = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt_timezone.utc)
+                        except ValueError:
+                            uploaded_at = None
+            # По требованию: просрочку определяем по index.clj.
+            # Если creation-time не найден (нет index.clj/нет ключа) — не подсвечиваем как просроченное.
+            if uploaded_at:
+                # Просрочено, если загружено строго ПОСЛЕ дедлайна
+                in_time = uploaded_at <= deadline
         sfiles.append({
-            'file': bool(doc),
-            'in_time': True,
+            # В шаблоне используется `f.file.in_time`, поэтому кладём объект-словарь вместо bool.
+            'file': ({'in_time': in_time} if doc else None),
             'link': doc.file.url if doc else '',
+            'deadline': deadline.strftime("%d.%m.%Y"),
+            'uploaded_at': uploaded_at.strftime("%d.%m.%Y %H:%M:%S") if uploaded_at else "",
         })
     department = (enroll.department or '').strip() or 'Не указана'
     return {

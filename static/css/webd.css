@@ -144,19 +144,20 @@
 }
 
 td.webd_rt_has_file {
-    background-color: #fcc;
+    background-color: #fcc !important;
     text-align: center;
     vertical-align: middle;
 }
 
 td.webd_rt_has_file_in_time {
-    background-color: white;
+    background-color: white !important;
     text-align: center;
     vertical-align: middle;
 }
 
 td.webd_rt_no_file {
-    background-color: #fcc;
+    /* Пустые ячейки не должны подсвечиваться как "просрочено" */
+    background-color: white !important;
 }
 
 a.user_no_file {

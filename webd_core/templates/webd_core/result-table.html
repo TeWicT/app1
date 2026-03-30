@@ -49,7 +49,8 @@
         {% for f in s.sfiles %}
         <td class="webd_rt_cell webd_rt_intsl_cell {% if f.file %}
                                                         {%if f.file.in_time%}webd_rt_has_file_in_time{%else%}webd_rt_has_file{%endif%}
-                                                    {%else%}webd_rt_no_file{%endif%}">
+                                                    {%else%}webd_rt_no_file{%endif%}"
+            {% if f.file %}title="Дедлайн: {{ f.deadline }}&#10;Загружено: {{ f.uploaded_at|default:'—' }}"{% endif %}>
             {% if f.file %}
             <a target="_blank" href="{{f.link}}"><img alt="PDF" src="{% static "images/pdf_icon.png" %}"/></a>
             {%endif%}
