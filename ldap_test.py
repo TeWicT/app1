@@ -5,7 +5,7 @@ LDAP_PORT = 636                        # ваш порт
 LDAP_USE_SSL = True                   # или True, если нужен LDAPS
 
 BASE_DN = 'dc=cs,dc=karelia,dc=ru'  # видно из Server info
-UID = 'pyantin'
+UID = 'chistyak'
 
 def main():
     server = Server(LDAP_SERVER, port=LDAP_PORT, use_ssl=LDAP_USE_SSL, get_info=ALL)
