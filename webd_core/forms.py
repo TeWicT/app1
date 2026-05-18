@@ -1,4 +1,5 @@
 from django import forms
+from .utils.text import normalize_text_field
 from .models import (
     Enrollment,
     Document,
@@ -19,6 +20,18 @@ class DocumentForm(forms.ModelForm):
 
 
 class StudentForm(forms.ModelForm):
+    def clean_title(self):
+        return normalize_text_field(self.cleaned_data.get('title'))
+
+    def clean_adviser_name(self):
+        return normalize_text_field(self.cleaned_data.get('adviser_name'))
+
+    def clean_adviser_status(self):
+        return normalize_text_field(self.cleaned_data.get('adviser_status'))
+
+    def clean_adviser_rank(self):
+        return normalize_text_field(self.cleaned_data.get('adviser_rank'))
+
     class Meta:
         model = Enrollment
         fields = ['adviser_name', 'adviser_position', 'adviser_status', 'adviser_rank', 'department','title']

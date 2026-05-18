@@ -31,6 +31,7 @@ from django.contrib import messages
 from collections import defaultdict
 from django.template.loader import render_to_string
 from .utils.pdf import html_to_pdf
+from .utils.text import normalize_text_field
 import re
 
 GROUP_METHOD_DEFAULT = 'default'
@@ -232,10 +233,10 @@ def _build_row(enroll, doc_types):
         'year': enroll.year.year,
         'department': department,
         'group': enroll.group.name,
-        'title': enroll.title,
-        'name': enroll.student.full_name,
+        'title': normalize_text_field(enroll.title),
+        'name': normalize_text_field(enroll.student.full_name),
         'logins': enroll.student.login,
-        'adviser_name_formatted': enroll.adviser_name,
+        'adviser_name_formatted': normalize_text_field(enroll.adviser_name),
         'sfiles': sfiles,
     }
 
@@ -278,12 +279,12 @@ def _write_legacy_index_for_enrollment(enrollment):
     content = (
         "{"
         f":department \"{(enrollment.department or '').replace(chr(34), chr(39))}\", "
-        f":name \"{(enrollment.student.full_name or '').replace(chr(34), chr(39))}\", "
+        f":name \"{normalize_text_field(enrollment.student.full_name).replace(chr(34), chr(39))}\", "
         f":identity-time \"{timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\", "
-        f":adviser-name \"{(enrollment.adviser_name or '').replace(chr(34), chr(39))}\", "
-        f":title \"{(enrollment.title or '').replace(chr(34), chr(39))}\", "
-        f":adviser-rank \"{(enrollment.adviser_rank or '').replace(chr(34), chr(39))}\", "
-        f":adviser-position \"{(enrollment.adviser_position or '').replace(chr(34), chr(39))}\", "
+        f":adviser-name \"{normalize_text_field(enrollment.adviser_name).replace(chr(34), chr(39))}\", "
+        f":title \"{normalize_text_field(enrollment.title).replace(chr(34), chr(39))}\", "
+        f":adviser-rank \"{normalize_text_field(enrollment.adviser_rank).replace(chr(34), chr(39))}\", "
+        f":adviser-position \"{normalize_text_field(enrollment.adviser_position).replace(chr(34), chr(39))}\", "
         f":files {{{files_body}}} "
         f":adviser-status \"{(enrollment.adviser_status or '').replace(chr(34), chr(39))}\""
         "}"

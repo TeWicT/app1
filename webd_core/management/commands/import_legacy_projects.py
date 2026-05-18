@@ -10,6 +10,7 @@ from ldap3 import ALL, ALL_ATTRIBUTES, Connection, Server
 from ldap3.core.exceptions import LDAPException
 
 from webd_core.models import Document, Enrollment, Group, Student, Year
+from webd_core.utils.text import normalize_text_field
 
 
 LEGACY_ROOT_DEFAULT = "groups/projects"
@@ -25,9 +26,11 @@ def _parse_index_clj(text: str) -> dict:
     def _unescape_legacy(value: str) -> str:
         # Разэкранируем стандартные последовательности из legacy-файлов
         value = value.replace(r'\"', '"')
+        value = value.replace(r'\r\n', '\n')
+        value = value.replace(r'\r', '\n')
         value = value.replace(r'\n', '\n')
         value = value.replace(r'\t', '\t')
-        return value
+        return normalize_text_field(value)
     top_level_keys = [
         "department",
         "name",
@@ -255,10 +258,12 @@ class Command(BaseCommand):
                             full_name = login
                         department = index_data.get("department", "")
                         adviser_name = index_data.get("adviser-name", "")
-                        title = index_data.get("title", "")
-                        adviser_rank = index_data.get("adviser-rank", "")
-                        adviser_position = index_data.get("adviser-position", "")
-                        adviser_status = index_data.get("adviser-status", "")
+                        title = normalize_text_field(index_data.get("title", ""))
+                        adviser_rank = normalize_text_field(index_data.get("adviser-rank", ""))
+                        adviser_position = normalize_text_field(index_data.get("adviser-position", ""))
+                        adviser_status = normalize_text_field(index_data.get("adviser-status", ""))
+                        department = normalize_text_field(department)
+                        adviser_name = normalize_text_field(adviser_name)
 
                         if not dry_run:
                             student_obj, student_created = Student.objects.get_or_create(

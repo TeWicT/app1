@@ -1,6 +1,12 @@
 from django import template
+from webd_core.utils.text import normalize_text_field
 
 register = template.Library()
+
+
+@register.filter
+def normalize_text(value):
+    return normalize_text_field(value)
 
 @register.filter
 def get_item(dictionary, key):

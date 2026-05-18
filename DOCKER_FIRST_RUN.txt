@@ -1,0 +1,151 @@
+================================================================================
+  Первый запуск проекта в Docker (app1)
+================================================================================
+
+Требования:
+  - Docker Desktop (Windows) установлен и запущен
+  - В терминале доступны команды: docker, docker compose
+
+
+--------------------------------------------------------------------------------
+1. Подготовка файла окружения .env
+--------------------------------------------------------------------------------
+
+В корне проекта должен быть файл .env (его нет в git).
+
+Скопируйте пример:
+
+  copy env.example .env
+
+Минимально важные переменные (уже есть в env.example):
+
+  DJANGO_SECRET_KEY=...
+  DJANGO_DEBUG=False
+  DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
+
+  POSTGRES_DB=app1
+  POSTGRES_USER=app1user
+  POSTGRES_PASSWORD=app1pass
+  POSTGRES_HOST=db
+  POSTGRES_PORT=5432
+
+Для локальной разработки можно включить отладку:
+
+  DJANGO_DEBUG=True
+
+При необходимости добавьте CSRF (если POST-формы ругаются на Origin):
+
+  DJANGO_CSRF_TRUSTED_ORIGINS=http://127.0.0.1,http://localhost
+
+
+--------------------------------------------------------------------------------
+2. Сборка и запуск контейнеров
+--------------------------------------------------------------------------------
+
+Из корня проекта:
+
+  cd D:\cursovaya\app1
+  docker compose up -d --build
+
+Поднимутся сервисы:
+  - app1_db      (PostgreSQL)
+  - app1_redis   (Redis для WebSocket)
+  - app1_web     (Django + Daphne)
+  - app1_nginx   (прокси, порт 80)
+
+Проверка статуса:
+
+  docker compose ps
+
+Просмотр логов приложения:
+
+  docker compose logs -f web
+
+
+--------------------------------------------------------------------------------
+3. Инициализация базы данных (первый раз)
+--------------------------------------------------------------------------------
+
+Применить миграции:
+
+  docker compose exec web python manage.py migrate
+
+Если миграций ещё нет, создайте их (один раз на машине разработки):
+
+  docker compose exec web python manage.py makemigrations webd_core
+  docker compose exec web python manage.py migrate
+
+(Опционально) Создать суперпользователя Django для /admin/:
+
+  docker compose exec web python manage.py createsuperuser
+
+
+--------------------------------------------------------------------------------
+4. Импорт данных (по необходимости)
+--------------------------------------------------------------------------------
+
+Импорт legacy-работ из media/groups/projects/ (НЕ запускается автоматически при старте):
+
+  docker compose exec web python manage.py import_legacy_projects
+
+Пробный прогон без записи в БД:
+
+  docker compose exec web python manage.py import_legacy_projects --dry-run
+
+Импорт преподавателей из LDAP-группы faculty_sup (User + TeacherProfile):
+
+  docker compose exec web python manage.py import_faculty_sup
+
+Пробный прогон:
+
+  docker compose exec web python manage.py import_faculty_sup --dry-run
+
+
+--------------------------------------------------------------------------------
+5. Открыть сайт
+--------------------------------------------------------------------------------
+
+В браузере:
+
+  http://localhost
+
+или
+
+  http://127.0.0.1
+
+Статика и медиа отдаются через nginx.
+Папка media на хосте: .\media (смонтирована в контейнер).
+
+
+--------------------------------------------------------------------------------
+6. Полезные команды
+--------------------------------------------------------------------------------
+
+Остановить контейнеры:
+
+  docker compose down
+
+Остановить и удалить тома БД (ОСТОРОЖНО: удалит данные PostgreSQL):
+
+  docker compose down -v
+
+Пересобрать после изменений в коде:
+
+  docker compose up -d --build
+
+Выполнить произвольную management-команду:
+
+  docker compose exec web python manage.py <команда>
+
+
+================================================================================
+  Краткая шпаргалка (первый запуск)
+================================================================================
+
+  copy env.example .env
+  docker compose up -d --build
+  docker compose exec web python manage.py migrate
+  docker compose exec web python manage.py import_legacy_projects
+  docker compose exec web python manage.py import_faculty_sup
+
+================================================================================

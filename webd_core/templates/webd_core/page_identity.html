@@ -1,4 +1,5 @@
 {% extends "webd_core/layout.html" %}
+{% load custom_filters %}
 
 {% block title %}
 Курс: регистрация работы
@@ -94,7 +95,7 @@
 		<div>
 			<label for="user_title" class="user_form_label" style="vertical-align:top"><span class="star">*</span>Тема работы:</label>
 			<textarea id="user_title" name="title" class="user_title inp"
-                      rows="3" style="width:400px" maxlength="250" required="required"{% if not is_editable %} readonly="readonly" disabled="disabled"{% endif %}>{{enroll.title}}</textarea>
+                      rows="3" style="width:400px" maxlength="250" required="required"{% if not is_editable %} readonly="readonly" disabled="disabled"{% endif %}>{{ enroll.title|normalize_text }}</textarea>
 		</div>
 		{% if is_editable %}
 		<div><input type="submit" value="Отправить" class="inp btn_save"/></div>
