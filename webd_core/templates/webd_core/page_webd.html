@@ -168,7 +168,7 @@
                formaction="{% url 'query_report' %}" formtarget="_blank"
                title="Генерирует PDF-файл с информацией о студентах, удовлетворяющих введенным в форму 'Поиск работ' параметрам."/>
         <input type="submit" id="btn_missing_report" value="Список не зарегистрированных" class="inp hidden"
-               formaction="/query/missing" formtarget="_blank"
+               formaction="{% url 'query_missing_report' %}" formtarget="_blank"
                title="Генерирует PDF-файл с информацией о студентах, не зарегистрировавших работы в текущем году"/>
     </form>
 

@@ -22,7 +22,6 @@ COPY . /app/
 
 RUN mkdir -p /app/staticfiles /app/media
 
-CMD ["bash", "-c", "python manage.py import_legacy_projects && \
-                    python manage.py collectstatic --noinput && \
+CMD ["bash", "-c", "python manage.py collectstatic --noinput && \
                     daphne -b 0.0.0.0 -p 8000 app1.asgi:application"]
 

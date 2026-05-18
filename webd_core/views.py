@@ -361,6 +361,58 @@ def _build_group_panels(grouped):
     return panels
 
 
+def _academic_year_label(year_value: int) -> str:
+    return f"{year_value}-{year_value + 1}"
+
+
+def _collect_missing_students_by_group(post_data):
+    """
+    Студенты без зарегистрированной работы (пустой title) в последнем учебном году.
+    Возвращает (group_panels, academic_year_label) или (None, None) если год не найден.
+    """
+    latest_year = Year.objects.order_by('-year').first()
+    if not latest_year:
+        return None, None
+
+    qs = Enrollment.objects.select_related('student', 'group').filter(
+        year=latest_year,
+    ).filter(Q(title__isnull=True) | Q(title=''))
+
+    groups = post_data.getlist('groups')
+    if groups and any(groups):
+        group_values = [g for g in groups if g]
+        if group_values:
+            qs = qs.filter(group__name__in=group_values)
+
+    department = post_data.get('department', '').strip()
+    if department:
+        qs = qs.filter(department__iexact=department)
+
+    name = post_data.get('name', '').strip()
+    if name:
+        qs = qs.filter(student__full_name__icontains=name)
+
+    adviser = post_data.get('adviser-name', '').strip()
+    if adviser:
+        qs = qs.filter(adviser_name__icontains=adviser)
+
+    by_group = defaultdict(list)
+    for enroll in qs.order_by('student__full_name'):
+        by_group[enroll.group.name].append(enroll.student.full_name)
+
+    group_panels = []
+    for group_name in sorted(by_group.keys()):
+        students = [{'full_name': n} for n in by_group[group_name]]
+        student_rows = [{'index': i, 'full_name': s['full_name']} for i, s in enumerate(students, start=1)]
+        group_panels.append({
+            'group': group_name,
+            'students': student_rows,
+            'total': len(student_rows),
+        })
+
+    return group_panels, _academic_year_label(latest_year.year)
+
+
 def _build_flat_sections(flat_rows):
     sections = []
     titles = {
@@ -525,6 +577,27 @@ def query_report(request):
     pdf_bytes = html_to_pdf(html)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="report.pdf"'
+    return response
+
+
+@login_required(login_url='page_webd')
+def query_missing_report(request):
+    group_panels, academic_year_label = _collect_missing_students_by_group(request.POST)
+    group_panels = group_panels or []
+    report_date = timezone.localtime(timezone.now()).strftime('%d.%m.%Y')
+    total_count = sum(panel.get('total', 0) for panel in group_panels)
+
+    context = {
+        'group_panels': group_panels,
+        'academic_year_label': academic_year_label or '',
+        'report_date': report_date,
+        'total_count': total_count,
+    }
+    html = render_to_string('webd_core/missing_report_template.html', context)
+
+    pdf_bytes = html_to_pdf(html)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="missing_report.pdf"'
     return response
 
 
@@ -1388,7 +1461,7 @@ def discussion_view(request, thread_id: int):
 
     if request.method == 'POST':
         text = (request.POST.get('text') or '').strip()
-        if text:
+        if text and len(text) <= 4096:
             author_name = ''
             if teacher:
                 author_name = teacher.full_name
@@ -1400,6 +1473,8 @@ def discussion_view(request, thread_id: int):
                 author_name=author_name or (request.user.get_username() if request.user.is_authenticated else 'Гость'),
                 text=text,
             )
+        elif text and len(text) > 4096:
+            messages.error(request, "Сообщение слишком длинное (максимум 4096 символов).")
         return redirect('discussion_view', thread_id=thread.id)
 
     approved_requests = thread.topic.requests.filter(status=TopicRequest.STATUS_APPROVED).select_related(

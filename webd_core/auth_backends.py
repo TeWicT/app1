@@ -1,11 +1,13 @@
 from typing import Optional
 
+import os
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth.models import User
 
-from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
+from ldap3 import BASE, SUBTREE, Server, Connection, ALL, ALL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPException, LDAPBindError
+from ldap3.utils.conv import escape_filter_chars
 
 from webd_core.models import Student, Year, Group, Enrollment, TeacherProfile
 
@@ -109,12 +111,22 @@ class LdapBackend(BaseBackend):
         user.last_name = last_name
         user.save()
 
-        # 5. Если это студент (DN содержит ou=students), создаём/обновляем записи
+        # 5. Определяем роль с приоритетом DN:
+        #    - если DN содержит ou=students -> студент (это важнее любых групп)
+        #    - иначе, если состоит в cn=faculty_sup -> преподаватель
+        #    - иначе -> студент
         if entry is not None and "ou=students" in entry.entry_dn.lower():
             self._ensure_student_records(username, attrs, entry)
-        # 6. Если это преподаватель (DN содержит ou=faculty), создаём профиль преподавателя
-        elif entry is not None and "ou=faculty" in entry.entry_dn.lower():
+        elif entry is not None and self._is_faculty_sup_member(
+            server=server,
+            ldap_base_dn=ldap_base_dn,
+            username=username,
+            user_dn=entry.entry_dn,
+            attrs=attrs,
+        ):
             self._ensure_teacher_profile(user, attrs, entry)
+        elif entry is not None:
+            self._ensure_student_records(username, attrs, entry)
 
         return user
 
@@ -123,6 +135,56 @@ class LdapBackend(BaseBackend):
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return None
+
+    @staticmethod
+    def _is_faculty_sup_member(server: Server, ldap_base_dn: str, username: str, user_dn: str, attrs: dict) -> bool:
+        """
+        True если пользователь состоит в группе cn=faculty_sup.
+
+        Проверяем 2 способами:
+        - через memberOf (если сервер отдаёт этот атрибут);
+        - через поиск группы по атрибутам member/uniqueMember/memberUid.
+        """
+        # 1) memberOf (если включён на сервере)
+        member_of = attrs.get("memberOf") or []
+        for dn in member_of:
+            try:
+                if "cn=faculty_sup," in str(dn).lower():
+                    return True
+            except Exception:
+                continue
+
+        # 2) поиск по membership (универсально для разных objectClass)
+        group_base_dn = os.getenv("LDAP_GROUP_BASE_DN", "ou=group,dc=cs,dc=karelia,dc=ru")
+        # Если кто-то переопределит базу групп вне ldap_base_dn, используем её как есть.
+        search_base = group_base_dn or ldap_base_dn
+
+        uid_esc = escape_filter_chars(username)
+        dn_esc = escape_filter_chars(user_dn)
+        membership_filter = (
+            "(&"
+            "(cn=faculty_sup)"
+            "(|"
+            f"(member={dn_esc})"
+            f"(uniqueMember={dn_esc})"
+            f"(memberUid={uid_esc})"
+            ")"
+            ")"
+        )
+        try:
+            conn = Connection(server, auto_bind=True)
+            conn.search(
+                search_base=search_base,
+                search_filter=membership_filter,
+                search_scope=SUBTREE,
+                attributes=["cn"],
+                size_limit=1,
+            )
+            found = bool(conn.entries)
+            conn.unbind()
+            return found
+        except LDAPException:
+            return False
 
     @staticmethod
     def _extract_group_name_from_dn(dn: str) -> Optional[str]:

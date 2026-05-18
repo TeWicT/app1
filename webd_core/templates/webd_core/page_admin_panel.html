@@ -19,7 +19,7 @@
             <div style="margin: 8px 0 12px 0;">
                 <label>
                     Преподаватель:
-                    <select name="teacher_id" class="table-select" required>
+                    <select name="teacher_id" class="table-select" id="admin-teacher-select" required>
                         {% for t in teachers %}
                         <option value="{{ t.id }}">{{ t.full_name }}</option>
                         {% endfor %}
@@ -239,7 +239,7 @@
     <div class="topics-table-wrapper">
         {% if teacher_panels %}
             {% for panel in teacher_panels %}
-                <div class="admin-teacher-block">
+                <div class="admin-teacher-block" data-teacher-id="{{ panel.teacher.id }}">
                     <h3 class="admin-teacher-block__title">{{ panel.teacher.full_name }}</h3>
 
                     {% if panel.free_topics %}
@@ -300,6 +300,34 @@
 </div>
 
 <script>
+(function() {
+    const teacherSelect = document.getElementById('admin-teacher-select');
+    if (!teacherSelect) return;
+
+    const STORAGE_KEY = 'admin_panel_teacher_id';
+    const blocks = Array.from(document.querySelectorAll('.admin-teacher-block[data-teacher-id]'));
+
+    function applyFilter(teacherId) {
+        const tid = String(teacherId || '');
+        blocks.forEach(b => {
+            b.style.display = (String(b.dataset.teacherId) === tid) ? '' : 'none';
+        });
+    }
+
+    // Restore last selected teacher (if still exists)
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && Array.from(teacherSelect.options).some(o => o.value === saved)) {
+        teacherSelect.value = saved;
+    }
+
+    applyFilter(teacherSelect.value);
+
+    teacherSelect.addEventListener('change', function() {
+        localStorage.setItem(STORAGE_KEY, teacherSelect.value);
+        applyFilter(teacherSelect.value);
+    });
+})();
+
 (function() {
     const table = document.getElementById('new-topics-table')?.querySelector('tbody');
     const addBtn = document.getElementById('add-topic-row');

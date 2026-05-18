@@ -6,6 +6,8 @@ from .models import DiscussionThread, DiscussionMessage, TopicRequest, Year, Enr
 
 
 class DiscussionConsumer(AsyncWebsocketConsumer):
+    MAX_MESSAGE_LEN = 4096
+
     async def connect(self):
         self.thread_id = self.scope['url_route']['kwargs'].get('thread_id')
         self.group_name = f"discussion_{self.thread_id}"
@@ -34,6 +36,8 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
             return
         text = (payload.get("text") or "").strip()
         if not text:
+            return
+        if len(text) > self.MAX_MESSAGE_LEN:
             return
 
         message = await self._create_message(text)

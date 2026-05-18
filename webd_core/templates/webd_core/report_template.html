@@ -57,7 +57,7 @@
             <th>Ф.И.О. студента</th>
             <th>Ф.И.О. руководителя</th>
             {% for f in section.files %}
-              <th>{{ f.name }}</th>
+              <th>{{ f.name|safe }}</th>
             {% endfor %}
             <th>Подпись руководителя</th>
           </tr>
@@ -106,7 +106,7 @@
               <th>Ф.И.О. студента</th>
               <th>Ф.И.О. руководителя</th>
               {% for f in panel.files %}
-                <th>{{ f.name }}</th>
+                <th>{{ f.name|safe }}</th>
               {% endfor %}
               <th>Подпись руководителя</th>
             </tr>

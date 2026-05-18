@@ -22,10 +22,20 @@
     {% endif %}
   </div>
 
-  <form method="post" action="" style="display: flex; gap: 8px;">
+  <form method="post" action="" style="display: flex; gap: 20px; align-items: flex-start;">
     {% csrf_token %}
-    <textarea name="text" rows="2" placeholder="Напишите сообщение..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"></textarea>
-    <button type="submit" style="padding: 8px 14px; border: none; background: #2F7DF6; color: #fff; border-radius: 6px; cursor: pointer;">Отправить</button>
+    <div style="flex: 1 1 auto; max-width: calc(100% - 152px); min-width: 0; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box;">
+      <textarea id="chat-text" name="text" rows="2" maxlength="4096" placeholder="Напишите сообщение..." style="width: 100%; min-width: 0; padding: 8px; border: 1px solid #ccc; border-radius: 6px; resize: vertical;"></textarea>
+      <div style="display:flex; justify-content: space-between; align-items: center;">
+        <div id="chat-limit-hint" style="font-size: 11pt; color: #b02a37; display:none;">
+          Максимальная длина сообщения: 4096 символов.
+        </div>
+        <div id="chat-counter" style="font-size: 11pt; color: #666; margin-left:auto;">
+          0/4096
+        </div>
+      </div>
+    </div>
+    <button id="chat-send" type="submit" style="flex: 0 0 132px; width: 132px; white-space: nowrap; padding: 8px 14px; border: none; background: #2F7DF6; color: #fff; border-radius: 6px; cursor: pointer; box-sizing: border-box;">Отправить</button>
   </form>
 </div>
 <script>
@@ -39,13 +49,34 @@
   (function() {
     var threadId = "{{ thread.id }}";
     if (!threadId) return;
+    var MAX_LEN = 4096;
     var scheme = (window.location.protocol === "https:") ? "wss" : "ws";
     var socketUrl = scheme + "://" + window.location.host + "/ws/discussion/" + threadId + "/";
     var ws = new WebSocket(socketUrl);
 
     var messagesBox = document.getElementById('messages');
     var form = document.querySelector('form[method="post"]');
-    var textarea = form ? form.querySelector('textarea[name="text"]') : null;
+    var textarea = document.getElementById('chat-text') || (form ? form.querySelector('textarea[name="text"]') : null);
+    var sendBtn = document.getElementById('chat-send') || (form ? form.querySelector('button[type="submit"]') : null);
+    var counter = document.getElementById('chat-counter');
+    var limitHint = document.getElementById('chat-limit-hint');
+
+    function updateCounter() {
+      if (!textarea) return;
+      var len = (textarea.value || '').length;
+      if (counter) counter.textContent = String(len) + '/' + String(MAX_LEN);
+      var tooLong = len > MAX_LEN;
+      if (limitHint) limitHint.style.display = tooLong ? '' : 'none';
+      if (sendBtn) {
+        sendBtn.disabled = tooLong;
+        sendBtn.style.opacity = tooLong ? '0.6' : '1';
+        sendBtn.style.cursor = tooLong ? 'not-allowed' : 'pointer';
+      }
+    }
+    if (textarea) {
+      textarea.addEventListener('input', updateCounter);
+      updateCounter();
+    }
 
     ws.onmessage = function(evt) {
       try {
@@ -55,7 +86,13 @@
           wrap.style.marginBottom = '10px';
           var header = document.createElement('div');
           header.style.fontWeight = '600';
-          header.innerHTML = (data.author_name || '—') + ' <span style="color:#888; font-weight:400;">' + (data.created_at || '') + '</span>';
+          var authorText = document.createTextNode((data.author_name || '—') + ' ');
+          var meta = document.createElement('span');
+          meta.style.color = '#888';
+          meta.style.fontWeight = '400';
+          meta.textContent = data.created_at || '';
+          header.appendChild(authorText);
+          header.appendChild(meta);
           var body = document.createElement('div');
           body.style.whiteSpace = 'pre-wrap';
           body.textContent = data.text || '';
@@ -74,9 +111,14 @@
         e.preventDefault();
         var text = (textarea.value || '').trim();
         if (!text) return;
+        if (text.length > MAX_LEN) {
+          updateCounter();
+          return;
+        }
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'message', text: text }));
           textarea.value = '';
+          updateCounter();
           textarea.focus();
         } else {
           // Фоллбек — на случай отсутствия WS

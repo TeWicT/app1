@@ -10,6 +10,7 @@ urlpatterns = [
     path('file/<int:foundyear>/', views.upload_view, name='page_upload'),
     path('login/exit/', views.logout_view, name='logout'),
     path('query/report/', views.query_report, name='query_report'),
+    path('query/missing/', views.query_missing_report, name='query_missing_report'),
     path('topics/manage/', views.teacher_topics_view, name='teacher_topics'),
     path('topics/select/', views.student_topics_view, name='student_topics'),
     path('discussion/', views.student_discussion, name='student_discussion'),
